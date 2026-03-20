@@ -1,0 +1,24 @@
+# Core Django
+Django>=5.1,<5.2
+psycopg[binary]>=3.1
+django-environ>=0.11
+
+# Security
+django-axes>=7.0
+django-csp>=4.0
+
+# Development
+django-debug-toolbar>=4.4
+django-extensions>=3.2
+
+# Utilities
+django-filter>=24.0
+whitenoise>=6.7
+
+# API Calls (needed from Phase 4, but install now)
+requests>=2.32
+
+# Future phases
+# celery>=5.4
+# django-celery-beat>=2.6
+# redis>=5.0

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Login — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center -mt-20">
+    <div class="w-full max-w-sm">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold tracking-wider text-white">
+                SOC <span class="text-indigo-400">FORGE</span>
+            </h1>
+            <p class="text-sm text-gray-500 mt-2">Threat Intelligence Investigation Engine</p>
+        </div>
+
+        <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-200 mb-4">Sign In</h2>
+
+            {% if form.errors %}
+            <div class="mb-4 px-4 py-3 rounded-md bg-red-900/40 text-red-300 border border-red-800 text-sm">
+                Invalid username or password.
+            </div>
+            {% endif %}
+
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label for="id_username" class="block text-sm text-gray-400 mb-1">Username</label>
+                    <input type="text" name="username" id="id_username" autofocus
+                           class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                                  focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="id_password" class="block text-sm text-gray-400 mb-1">Password</label>
+                    <input type="password" name="password" id="id_password"
+                           class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                                  focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                </div>
+                <button type="submit"
+                        class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors">
+                    Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

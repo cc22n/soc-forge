@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}{{ ci.indicator.value|truncatechars:30 }} — Community — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'community:search' %}" class="text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        ← Back to Community
+    </a>
+</div>
+
+<!-- Header -->
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6 mb-6">
+    <div class="flex items-start justify-between">
+        <div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex px-2 py-0.5 rounded text-xs
+                    {% if 'hash' in ci.indicator.ioc_type %}bg-violet-900/30 text-violet-300 border border-violet-800/40
+                    {% elif ci.indicator.ioc_type == 'ip' %}bg-emerald-900/30 text-emerald-300 border border-emerald-800/40
+                    {% elif ci.indicator.ioc_type == 'domain' %}bg-amber-900/30 text-amber-300 border border-amber-800/40
+                    {% else %}bg-sky-900/30 text-sky-300 border border-sky-800/40{% endif %}">
+                    {{ ci.indicator.get_ioc_type_display }}
+                </span>
+                <span class="text-xs text-gray-500">Community Intelligence</span>
+            </div>
+            <h1 class="text-lg font-bold text-white font-mono break-all mt-2">{{ ci.indicator.value }}</h1>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-[#2d2d44]">
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Data Points</p>
+            <p class="text-lg font-bold text-white mt-0.5">{{ total_results }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Times Investigated</p>
+            <p class="text-lg font-bold text-white mt-0.5">{{ ci.times_investigated }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">First Shared By</p>
+            <p class="text-sm text-gray-300 mt-1">{{ ci.first_seen_by.username|default:"unknown" }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Last Updated</p>
+            <p class="text-sm text-gray-300 mt-1">{{ ci.last_enriched_at|timesince }} ago</p>
+        </div>
+    </div>
+</div>
+
+<!-- Results by source -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-white">Shared Results</h2>
+</div>
+
+{% for source_name, source_data in results_by_source.items %}
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg mb-4 overflow-hidden">
+    <div class="px-5 py-3 border-b border-[#2d2d44] bg-[#1e1e35]">
+        <h3 class="text-sm font-semibold text-white">{{ source_name }}</h3>
+    </div>
+
+    <table class="w-full text-sm">
+        <tbody>
+            {% for r in source_data.results %}
+            <tr class="border-b border-[#2d2d44]/50 hover:bg-[#2d2d44]/20">
+                <td class="px-5 py-2.5 w-48">
+                    <span class="text-gray-300 text-xs font-medium">{{ r.field_name }}</span>
+                </td>
+                <td class="px-3 py-2.5">
+                    {% if r.value == True %}
+                    <span class="inline-flex px-2 py-0.5 rounded text-xs bg-red-900/30 text-red-300">True</span>
+                    {% elif r.value == False %}
+                    <span class="inline-flex px-2 py-0.5 rounded text-xs bg-emerald-900/30 text-emerald-300">False</span>
+                    {% else %}
+                    <span class="text-white text-xs font-mono break-all">{{ r.value|truncatechars:200 }}</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-2.5 w-32 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                        <!-- Confidence score -->
+                        <span class="text-xs {% if r.confidence_votes > 0 %}text-emerald-400{% elif r.confidence_votes < 0 %}text-red-400{% else %}text-gray-500{% endif %}">
+                            {% if r.confidence_votes > 0 %}+{% endif %}{{ r.confidence_votes }}
+                        </span>
+
+                        <!-- Vote buttons -->
+                        {% if r.contributed_by != request.user %}
+                        <form method="post" action="{% url 'community:vote' r.pk 'confirm' %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" title="Confirm"
+                                    class="p-1 rounded hover:bg-emerald-900/30 transition-colors
+                                    {% if user_votes|default_if_none:"" %}{% for vid, vtype in user_votes.items %}{% if vid == r.pk and vtype == 'confirm' %}text-emerald-400{% endif %}{% endfor %}{% endif %}
+                                    text-gray-500">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </button>
+                        </form>
+                        <form method="post" action="{% url 'community:vote' r.pk 'dispute' %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" title="Dispute"
+                                    class="p-1 rounded hover:bg-red-900/30 transition-colors text-gray-500">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="px-5 py-2 border-t border-[#2d2d44]/50 text-xs text-gray-500">
+        Contributed by {{ source_data.results.0.contributed_by.username|default:"unknown" }} · {{ source_data.results.0.contributed_at|timesince }} ago
+    </div>
+</div>
+{% empty %}
+<div class="text-center py-12 text-gray-500">
+    No shared results yet for this indicator.
+</div>
+{% endfor %}
+
+<!-- Notes section -->
+<div class="mt-8">
+    <h2 class="text-lg font-semibold text-white mb-4">Analyst Notes</h2>
+
+    <!-- Add note form -->
+    <form method="post" action="{% url 'community:add_note' ci.pk %}" class="mb-4">
+        {% csrf_token %}
+        <div class="flex gap-3">
+            <textarea name="content" rows="2"
+                      placeholder="Add your analysis notes, observations, or context..."
+                      class="flex-1 px-4 py-2.5 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                             focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
+                             placeholder-gray-600 resize-none"></textarea>
+            <button type="submit"
+                    class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors self-end">
+                Add Note
+            </button>
+        </div>
+    </form>
+
+    <!-- Existing notes -->
+    {% for note in notes %}
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-4 mb-3">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium text-gray-300">{{ note.author.username|default:"unknown" }}</span>
+            <span class="text-xs text-gray-500">{{ note.created_at|timesince }} ago</span>
+        </div>
+        <p class="text-sm text-gray-400 whitespace-pre-wrap">{{ note.content }}</p>
+    </div>
+    {% empty %}
+    <p class="text-sm text-gray-600">No notes yet. Be the first to add context about this indicator.</p>
+    {% endfor %}
+</div>
+{% endblock %}

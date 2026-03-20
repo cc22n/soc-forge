@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}New Profile — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'profiles:list' %}" class="text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        ← Back to Profiles
+    </a>
+</div>
+
+<div class="max-w-lg">
+    <h1 class="text-2xl font-bold text-white mb-6">Create Investigation Profile</h1>
+
+    <form method="post" class="space-y-5">
+        {% csrf_token %}
+
+        <div>
+            <label for="name" class="block text-sm text-gray-400 mb-1">Profile Name</label>
+            <input type="text" name="name" id="name" required autofocus
+                   placeholder="e.g., Malware Deep Dive"
+                   class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                          focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
+                          placeholder-gray-600">
+        </div>
+
+        <div>
+            <label for="ioc_type" class="block text-sm text-gray-400 mb-1">IOC Type</label>
+            <select name="ioc_type" id="ioc_type" required
+                    class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                           focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                <option value="">Select IOC type...</option>
+                {% for value, label in ioc_types %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="description" class="block text-sm text-gray-400 mb-1">Description <span class="text-gray-600">(optional)</span></label>
+            <textarea name="description" id="description" rows="3"
+                      placeholder="What is this profile for?"
+                      class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                             focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500
+                             placeholder-gray-600 resize-none"></textarea>
+        </div>
+
+        <div class="flex items-center gap-3 pt-2">
+            <button type="submit"
+                    class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors">
+                Continue → Select Sources
+            </button>
+            <a href="{% url 'profiles:list' %}" class="text-sm text-gray-500 hover:text-gray-400 transition-colors">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

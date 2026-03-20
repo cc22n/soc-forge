@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ source.name }} — SOC Forge{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="mb-4">
+    <a href="{% url 'sources:list' %}" class="text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        ← Back to Sources
+    </a>
+</div>
+
+<!-- Header -->
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6 mb-6">
+    <div class="flex items-start justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white">{{ source.name }}</h1>
+            <p class="text-sm text-gray-400 mt-1">{{ source.description }}</p>
+        </div>
+        <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium
+            {% if source.is_active %}bg-emerald-900/40 text-emerald-400 border border-emerald-800/50
+            {% else %}bg-red-900/40 text-red-400 border border-red-800/50{% endif %}">
+            {% if source.is_active %}Active{% else %}Inactive{% endif %}
+        </span>
+    </div>
+
+    <!-- Meta info -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-5 pt-5 border-t border-[#2d2d44]">
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Base URL</p>
+            <p class="text-sm text-gray-300 mt-0.5 truncate" title="{{ source.base_url }}">{{ source.base_url }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Auth Type</p>
+            <p class="text-sm text-gray-300 mt-0.5">{{ source.get_auth_type_display }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Rate Limit</p>
+            <p class="text-sm text-gray-300 mt-0.5">{{ source.rate_limit_per_minute }}/min</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Cache TTL</p>
+            <p class="text-sm text-gray-300 mt-0.5">
+                {% widthratio source.default_ttl_seconds 3600 1 %}h
+            </p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Used in Profiles</p>
+            <p class="text-sm text-gray-300 mt-0.5">{{ profile_count }}</p>
+        </div>
+    </div>
+</div>
+
+<!-- Fields by IOC type -->
+<div class="mb-4 flex items-center justify-between">
+    <h2 class="text-lg font-semibold text-white">Available Fields</h2>
+    <span class="text-sm text-gray-500">{{ total_fields }} total</span>
+</div>
+
+{% for ioc_label, groups in fields_by_ioc.items %}
+<div class="mb-6">
+    <h3 class="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+            {% if 'Hash' in ioc_label %}bg-violet-900/30 text-violet-300 border border-violet-800/40
+            {% elif 'IP' in ioc_label %}bg-emerald-900/30 text-emerald-300 border border-emerald-800/40
+            {% elif 'Domain' in ioc_label %}bg-amber-900/30 text-amber-300 border border-amber-800/40
+            {% elif 'URL' in ioc_label %}bg-sky-900/30 text-sky-300 border border-sky-800/40
+            {% else %}bg-gray-800 text-gray-300{% endif %}">
+            {{ ioc_label }}
+        </span>
+        <span class="text-gray-600">
+            {{ groups.required|length }} required ·
+            {{ groups.core|length }} core ·
+            {{ groups.optional|length }} optional
+        </span>
+    </h3>
+
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg overflow-hidden">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-[#2d2d44]">
+                    <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-medium">Field</th>
+                    <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-medium">Classification</th>
+                    <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-medium">API Path</th>
+                    <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-medium">Type</th>
+                    <th class="text-left px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-medium">Transform</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field in groups.required %}
+                <tr class="border-b border-[#2d2d44]/50 hover:bg-[#2d2d44]/30">
+                    <td class="px-4 py-2.5">
+                        <span class="text-white font-medium">{{ field.normalized_name }}</span>
+                        {% if field.description %}
+                        <p class="text-xs text-gray-500 mt-0.5">{{ field.description }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2.5">
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs bg-red-900/30 text-red-300 border border-red-800/40">required</span>
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400 font-mono">{{ field.api_field_path }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400">{{ field.data_type }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-500">{{ field.transform_function|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+                {% for field in groups.core %}
+                <tr class="border-b border-[#2d2d44]/50 hover:bg-[#2d2d44]/30">
+                    <td class="px-4 py-2.5">
+                        <span class="text-gray-200">{{ field.normalized_name }}</span>
+                        {% if field.description %}
+                        <p class="text-xs text-gray-500 mt-0.5">{{ field.description }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2.5">
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs bg-indigo-900/30 text-indigo-300 border border-indigo-800/40">core</span>
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400 font-mono">{{ field.api_field_path }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400">{{ field.data_type }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-500">{{ field.transform_function|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+                {% for field in groups.optional %}
+                <tr class="border-b border-[#2d2d44]/50 hover:bg-[#2d2d44]/30">
+                    <td class="px-4 py-2.5">
+                        <span class="text-gray-400">{{ field.normalized_name }}</span>
+                        {% if field.description %}
+                        <p class="text-xs text-gray-500 mt-0.5">{{ field.description }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2.5">
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700">optional</span>
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400 font-mono">{{ field.api_field_path }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-400">{{ field.data_type }}</td>
+                    <td class="px-4 py-2.5 text-xs text-gray-500">{{ field.transform_function|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

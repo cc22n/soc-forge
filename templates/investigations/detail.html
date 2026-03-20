@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Investigation #{{ investigation.pk }} — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'investigations:list' %}" class="text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        ← Back to Investigations
+    </a>
+</div>
+
+<!-- Header -->
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6 mb-6">
+    <div class="flex items-start justify-between">
+        <div>
+            <h1 class="text-lg font-bold text-white font-mono break-all">
+                {{ investigation.indicator.value }}
+            </h1>
+            <div class="flex items-center gap-3 mt-2">
+                <span class="inline-flex px-2 py-0.5 rounded text-xs
+                    {% if 'hash' in investigation.indicator.ioc_type %}bg-violet-900/30 text-violet-300 border border-violet-800/40
+                    {% elif investigation.indicator.ioc_type == 'ip' %}bg-emerald-900/30 text-emerald-300 border border-emerald-800/40
+                    {% elif investigation.indicator.ioc_type == 'domain' %}bg-amber-900/30 text-amber-300 border border-amber-800/40
+                    {% else %}bg-sky-900/30 text-sky-300 border border-sky-800/40{% endif %}">
+                    {{ investigation.indicator.get_ioc_type_display }}
+                </span>
+                <span class="text-xs text-gray-500">
+                    Profile: {{ investigation.profile_used.name|default:"—" }}
+                </span>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if not investigation.shared_to_community %}
+            <a href="{% url 'community:share' investigation.pk %}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded-md transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                </svg>
+                Share to Community
+            </a>
+            {% else %}
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-900/30 text-purple-300 text-xs rounded-md border border-purple-800/40">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Shared
+            </span>
+            {% endif %}
+            <span class="inline-flex px-2.5 py-1.5 rounded text-xs font-medium
+                {% if investigation.status == 'completed' %}bg-emerald-900/40 text-emerald-300 border border-emerald-800/50
+                {% elif investigation.status == 'partial' %}bg-amber-900/40 text-amber-300 border border-amber-800/50
+                {% elif investigation.status == 'error' %}bg-red-900/40 text-red-300 border border-red-800/50
+                {% else %}bg-gray-800 text-gray-400{% endif %}">
+                {{ investigation.get_status_display }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-[#2d2d44]">
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Coverage</p>
+            <div class="flex items-center gap-2 mt-1">
+                {% if investigation.coverage_score is not None %}
+                <div class="w-20 h-2 bg-[#2d2d44] rounded-full overflow-hidden">
+                    <div class="h-full rounded-full
+                        {% if investigation.coverage_score >= 70 %}bg-emerald-500
+                        {% elif investigation.coverage_score >= 40 %}bg-amber-500
+                        {% else %}bg-red-500{% endif %}"
+                        style="width: {{ investigation.coverage_score }}%"></div>
+                </div>
+                <span class="text-lg font-bold text-white">{{ investigation.coverage_score|floatformat:0 }}%</span>
+                {% else %}
+                <span class="text-gray-500">—</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Sources Queried</p>
+            <p class="text-lg font-bold text-white mt-1">{{ results_by_source|length }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Fields Found</p>
+            <p class="text-lg font-bold text-white mt-1">{{ total_results }}</p>
+        </div>
+        <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Duration</p>
+            <p class="text-lg font-bold text-white mt-1">
+                {% if duration %}{{ duration|floatformat:1 }}s{% else %}—{% endif %}
+            </p>
+        </div>
+    </div>
+
+    {% if investigation.error_detail %}
+    <div class="mt-4 px-4 py-3 rounded-md bg-red-900/20 border border-red-800/50 text-xs text-red-300">
+        <p class="font-medium mb-1">Errors:</p>
+        <pre class="whitespace-pre-wrap">{{ investigation.error_detail }}</pre>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Results by source -->
+{% for source_name, source_data in results_by_source.items %}
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg mb-4 overflow-hidden">
+    <div class="px-5 py-3 border-b border-[#2d2d44] flex items-center justify-between bg-[#1e1e35]">
+        <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold text-white">{{ source_name }}</h3>
+            <span class="text-xs text-gray-500">
+                {{ source_data.found }}/{{ source_data.total }} fields found
+            </span>
+        </div>
+        {% if source_data.response_time_ms %}
+        <span class="text-xs text-gray-500">{{ source_data.response_time_ms }}ms</span>
+        {% endif %}
+    </div>
+
+    <table class="w-full text-sm">
+        <tbody>
+            {% for r in source_data.results %}
+            <tr class="border-b border-[#2d2d44]/50 hover:bg-[#2d2d44]/20">
+                <td class="px-5 py-2.5 w-48">
+                    <span class="text-gray-300 text-xs font-medium">{{ r.field_name }}</span>
+                </td>
+                <td class="px-3 py-2.5">
+                    {% if r.status == 'found' %}
+                        {% if r.value == True %}
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs bg-red-900/30 text-red-300">True</span>
+                        {% elif r.value == False %}
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs bg-emerald-900/30 text-emerald-300">False</span>
+                        {% else %}
+                        <span class="text-white text-xs font-mono break-all">
+                            {% if r.value|length > 200 %}
+                                {{ r.value|truncatechars:200 }}
+                            {% else %}
+                                {{ r.value }}
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    {% elif r.status == 'not_found' %}
+                        <span class="text-xs text-gray-600 italic">Not found</span>
+                    {% elif r.status == 'error' %}
+                        <span class="text-xs text-red-400">Error</span>
+                    {% elif r.status == 'timeout' %}
+                        <span class="text-xs text-amber-400">Timeout</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-2.5 w-20 text-right">
+                    <span class="inline-flex px-1.5 py-0.5 rounded text-xs
+                        {% if r.status == 'found' %}bg-emerald-900/30 text-emerald-400
+                        {% elif r.status == 'not_found' %}bg-gray-800 text-gray-500
+                        {% elif r.status == 'error' %}bg-red-900/30 text-red-400
+                        {% else %}bg-amber-900/30 text-amber-400{% endif %}">
+                        {{ r.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% empty %}
+<div class="text-center py-12 text-gray-500">
+    No results found for this investigation.
+</div>
+{% endfor %}
+{% endblock %}

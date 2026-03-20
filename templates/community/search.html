@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Community Knowledge Base — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-white">Community Knowledge Base</h1>
+    <p class="text-sm text-gray-500 mt-1">Shared threat intelligence from all analysts.</p>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">Shared IOCs</p>
+        <p class="text-xl font-bold text-white mt-0.5">{{ total_indicators }}</p>
+    </div>
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">Data Points</p>
+        <p class="text-xl font-bold text-white mt-0.5">{{ total_results }}</p>
+    </div>
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">Contributors</p>
+        <p class="text-xl font-bold text-white mt-0.5">{{ total_contributors }}</p>
+    </div>
+</div>
+
+<!-- Search bar -->
+<form method="get" class="mb-6">
+    <div class="flex gap-3">
+        <input type="text" name="q" value="{{ query }}"
+               placeholder="Search by IOC value (hash, IP, domain, URL)..."
+               class="flex-1 px-4 py-2.5 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm font-mono
+                      focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 placeholder-gray-600">
+        <select name="type"
+                class="px-3 py-2.5 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
+                       focus:outline-none focus:border-indigo-500">
+            <option value="">All types</option>
+            <option value="ip" {% if ioc_filter == "ip" %}selected{% endif %}>IP</option>
+            <option value="domain" {% if ioc_filter == "domain" %}selected{% endif %}>Domain</option>
+            <option value="hash_sha256" {% if ioc_filter == "hash_sha256" %}selected{% endif %}>Hash SHA256</option>
+            <option value="hash_md5" {% if ioc_filter == "hash_md5" %}selected{% endif %}>Hash MD5</option>
+            <option value="url" {% if ioc_filter == "url" %}selected{% endif %}>URL</option>
+        </select>
+        <button type="submit"
+                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors">
+            Search
+        </button>
+    </div>
+</form>
+
+<!-- Results -->
+{% if indicators %}
+<div class="space-y-3">
+    {% for ci in indicators %}
+    <a href="{% url 'community:detail' ci.pk %}"
+       class="block bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-4 hover:border-indigo-500/50 hover:bg-[#1e1e35] transition-all">
+        <div class="flex items-start justify-between">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex px-2 py-0.5 rounded text-xs
+                        {% if 'hash' in ci.indicator.ioc_type %}bg-violet-900/30 text-violet-300 border border-violet-800/40
+                        {% elif ci.indicator.ioc_type == 'ip' %}bg-emerald-900/30 text-emerald-300 border border-emerald-800/40
+                        {% elif ci.indicator.ioc_type == 'domain' %}bg-amber-900/30 text-amber-300 border border-amber-800/40
+                        {% else %}bg-sky-900/30 text-sky-300 border border-sky-800/40{% endif %}">
+                        {{ ci.indicator.get_ioc_type_display }}
+                    </span>
+                    <span class="text-sm text-white font-mono truncate">{{ ci.indicator.value|truncatechars:60 }}</span>
+                </div>
+                <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                    <span>{{ ci.result_count }} data points</span>
+                    <span>{{ ci.note_count }} notes</span>
+                    <span>Investigated {{ ci.times_investigated }}x</span>
+                    <span>First shared by {{ ci.first_seen_by.username|default:"unknown" }}</span>
+                </div>
+            </div>
+            <span class="text-xs text-gray-500 ml-4 whitespace-nowrap">{{ ci.last_enriched_at|timesince }} ago</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% elif query %}
+<div class="text-center py-16">
+    <p class="text-gray-500">No results found for "{{ query }}".</p>
+</div>
+{% else %}
+<div class="text-center py-16">
+    <svg class="w-12 h-12 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    <p class="text-gray-500 mb-2">No shared intelligence yet.</p>
+    <p class="text-sm text-gray-600">Run an investigation and share the results to start building the knowledge base.</p>
+</div>
+{% endif %}
+{% endblock %}

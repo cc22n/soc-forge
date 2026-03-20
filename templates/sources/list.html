@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Intelligence Sources — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-white">Intelligence Sources</h1>
+    <p class="text-sm text-gray-500 mt-1">{{ active_sources }} active sources · {{ total_fields }} available fields</p>
+</div>
+
+<!-- Stats row -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">Total Sources</p>
+        <p class="text-xl font-bold text-white mt-0.5">{{ sources|length }}</p>
+    </div>
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">Total Fields</p>
+        <p class="text-xl font-bold text-white mt-0.5">{{ total_fields }}</p>
+    </div>
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">Hash Sources</p>
+        <p class="text-xl font-bold text-indigo-400 mt-0.5">{% for s in sources %}{% if s.hash_fields > 0 %}{% with count=count|default:0|add:1 %}{% endwith %}{% endif %}{% endfor %}{{ sources|length }}</p>
+    </div>
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg px-4 py-3">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">IP Sources</p>
+        <p class="text-xl font-bold text-emerald-400 mt-0.5">{{ sources|length }}</p>
+    </div>
+</div>
+
+<!-- Source cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for source in sources %}
+    <a href="{% url 'sources:detail' source.slug %}"
+       class="block bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-5 hover:border-indigo-500/50 hover:bg-[#1e1e35] transition-all group">
+
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-3">
+            <div>
+                <h3 class="text-base font-semibold text-white group-hover:text-indigo-300 transition-colors">
+                    {{ source.name }}
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">Priority #{{ source.priority }}</p>
+            </div>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                {% if source.is_active %}bg-emerald-900/40 text-emerald-400 border border-emerald-800/50
+                {% else %}bg-red-900/40 text-red-400 border border-red-800/50{% endif %}">
+                {% if source.is_active %}Active{% else %}Inactive{% endif %}
+            </span>
+        </div>
+
+        <!-- Description -->
+        <p class="text-xs text-gray-400 mb-4 line-clamp-2">{{ source.description }}</p>
+
+        <!-- IOC type badges -->
+        <div class="flex flex-wrap gap-1.5 mb-3">
+            {% if source.hash_fields > 0 %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-violet-900/30 text-violet-300 border border-violet-800/40">
+                HASH <span class="ml-1 text-violet-500">{{ source.hash_fields }}</span>
+            </span>
+            {% endif %}
+            {% if source.ip_fields > 0 %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-900/30 text-emerald-300 border border-emerald-800/40">
+                IP <span class="ml-1 text-emerald-500">{{ source.ip_fields }}</span>
+            </span>
+            {% endif %}
+            {% if source.domain_fields > 0 %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-900/30 text-amber-300 border border-amber-800/40">
+                DOMAIN <span class="ml-1 text-amber-500">{{ source.domain_fields }}</span>
+            </span>
+            {% endif %}
+            {% if source.url_fields > 0 %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-sky-900/30 text-sky-300 border border-sky-800/40">
+                URL <span class="ml-1 text-sky-500">{{ source.url_fields }}</span>
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Footer stats -->
+        <div class="flex items-center justify-between pt-3 border-t border-[#2d2d44]">
+            <span class="text-xs text-gray-500">{{ source.field_count }} fields</span>
+            <span class="text-xs text-gray-500">{{ source.rate_limit_per_minute }}/min</span>
+            <span class="text-xs text-gray-500">
+                {% if source.auth_type == "none" %}No key
+                {% elif source.auth_type == "header" %}Header auth
+                {% elif source.auth_type == "query_param" %}Query param
+                {% elif source.auth_type == "basic_auth" %}Basic auth
+                {% else %}{{ source.auth_type }}{% endif %}
+            </span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

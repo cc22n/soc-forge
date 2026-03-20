@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ profile.name }} — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'profiles:list' %}" class="text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        ← Back to Profiles
+    </a>
+</div>
+
+<!-- Header -->
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6 mb-6">
+    <div class="flex items-start justify-between">
+        <div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-bold text-white">{{ profile.name }}</h1>
+                {% if profile.is_default %}
+                <span class="inline-flex px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 border border-gray-700">System</span>
+                {% endif %}
+            </div>
+            {% if profile.description %}
+            <p class="text-sm text-gray-400 mt-2">{{ profile.description }}</p>
+            {% endif %}
+        </div>
+        <span class="inline-flex px-2.5 py-1 rounded text-xs font-medium
+            {% if 'hash' in profile.ioc_type %}bg-violet-900/30 text-violet-300 border border-violet-800/40
+            {% elif profile.ioc_type == 'ip' %}bg-emerald-900/30 text-emerald-300 border border-emerald-800/40
+            {% elif profile.ioc_type == 'domain' %}bg-amber-900/30 text-amber-300 border border-amber-800/40
+            {% else %}bg-sky-900/30 text-sky-300 border border-sky-800/40{% endif %}">
+            {{ profile.get_ioc_type_display }}
+        </span>
+    </div>
+
+    <!-- Stats + Actions -->
+    <div class="flex items-center justify-between mt-5 pt-5 border-t border-[#2d2d44]">
+        <div class="flex items-center gap-6 text-sm text-gray-400">
+            <span>{{ source_configs|length }} sources</span>
+            <span>{{ total_expected }} expected fields</span>
+            <span>{{ required_count }} required</span>
+        </div>
+        <div class="flex items-center gap-2">
+            {% if not profile.is_default %}
+            <a href="{% url 'profiles:edit_sources' profile.pk %}"
+               class="px-3 py-1.5 bg-[#2d2d44] hover:bg-[#3d3d54] text-gray-300 text-xs rounded-md transition-colors">
+                Edit Sources
+            </a>
+            <a href="{% url 'profiles:edit_fields' profile.pk %}"
+               class="px-3 py-1.5 bg-[#2d2d44] hover:bg-[#3d3d54] text-gray-300 text-xs rounded-md transition-colors">
+                Edit Fields
+            </a>
+            <a href="{% url 'profiles:delete' profile.pk %}"
+               class="px-3 py-1.5 hover:bg-red-900/30 text-red-400 text-xs rounded-md transition-colors">
+                Delete
+            </a>
+            {% else %}
+            <a href="{% url 'profiles:clone' profile.pk %}"
+               class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-md transition-colors">
+                Clone to My Profiles
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Sources and their fields -->
+{% for sc in source_configs %}
+<div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg mb-4 overflow-hidden">
+    <div class="px-5 py-3 border-b border-[#2d2d44] flex items-center justify-between bg-[#1e1e35]">
+        <div class="flex items-center gap-3">
+            <a href="{% url 'sources:detail' sc.source.slug %}"
+               class="text-sm font-semibold text-white hover:text-indigo-300 transition-colors">
+                {{ sc.source.name }}
+            </a>
+            <span class="text-xs text-gray-500">Priority #{{ sc.priority }}</span>
+        </div>
+        <span class="text-xs text-gray-500">{{ sc.expected_fields.count }} fields</span>
+    </div>
+
+    {% if sc.expected_fields.all %}
+    <div class="px-5 py-3">
+        <div class="flex flex-wrap gap-2">
+            {% for ef in sc.expected_fields.all %}
+            <span class="inline-flex items-center px-2.5 py-1 rounded text-xs
+                {% if ef.is_required %}bg-red-900/20 text-red-300 border border-red-800/40
+                {% else %}bg-[#2d2d44]/50 text-gray-300 border border-[#2d2d44]{% endif %}">
+                {{ ef.available_field.normalized_name }}
+                {% if ef.is_required %}
+                <svg class="w-3 h-3 ml-1 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                {% endif %}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="px-5 py-4 text-xs text-gray-500">No fields configured yet.</div>
+    {% endif %}
+</div>
+{% empty %}
+<div class="text-center py-12">
+    <p class="text-gray-500 mb-4">No sources configured yet.</p>
+    {% if not profile.is_default %}
+    <a href="{% url 'profiles:edit_sources' profile.pk %}"
+       class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors">
+        Add Sources
+    </a>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

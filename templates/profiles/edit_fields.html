@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Select Fields — {{ profile.name }} — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'profiles:edit_sources' profile.pk %}" class="text-sm text-gray-500 hover:text-indigo-400 transition-colors">
+        ← Back to Sources
+    </a>
+</div>
+
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-white">Select Expected Fields</h1>
+    <p class="text-sm text-gray-500 mt-1">
+        <span class="text-gray-300">{{ profile.name }}</span> · {{ profile.get_ioc_type_display }}
+        — Tag the fields you expect from each source. Mark critical ones as required.
+    </p>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    {% for item in configs_with_fields %}
+    <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg mb-4 overflow-hidden">
+        <!-- Source header -->
+        <div class="px-5 py-3 border-b border-[#2d2d44] flex items-center justify-between bg-[#1e1e35]">
+            <div class="flex items-center gap-3">
+                <h3 class="text-sm font-semibold text-white">{{ item.config.source.name }}</h3>
+                <span class="text-xs text-gray-500">Priority #{{ item.config.priority }}</span>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                <button type="button" onclick="selectAll({{ item.config.source.id }})"
+                        class="text-indigo-400 hover:text-indigo-300 transition-colors">Select all</button>
+                <button type="button" onclick="selectNone({{ item.config.source.id }})"
+                        class="text-gray-500 hover:text-gray-400 transition-colors">Clear</button>
+            </div>
+        </div>
+
+        <!-- Fields table -->
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-[#2d2d44]">
+                    <th class="text-left px-5 py-2 text-xs text-gray-500 uppercase tracking-wider font-medium w-8">Use</th>
+                    <th class="text-left px-3 py-2 text-xs text-gray-500 uppercase tracking-wider font-medium">Field</th>
+                    <th class="text-left px-3 py-2 text-xs text-gray-500 uppercase tracking-wider font-medium">Classification</th>
+                    <th class="text-left px-3 py-2 text-xs text-gray-500 uppercase tracking-wider font-medium">Type</th>
+                    <th class="text-center px-3 py-2 text-xs text-gray-500 uppercase tracking-wider font-medium w-16">Required</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fd in item.fields_data %}
+                <tr class="border-b border-[#2d2d44]/50 hover:bg-[#2d2d44]/20">
+                    <td class="px-5 py-2">
+                        <input type="checkbox"
+                               name="fields_{{ item.config.source.id }}"
+                               value="{{ fd.field.id }}"
+                               data-source="{{ item.config.source.id }}"
+                               {% if fd.is_selected %}checked{% endif %}
+                               class="source-field-{{ item.config.source.id }} rounded bg-[#0f0f1a] border-[#2d2d44] text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0">
+                    </td>
+                    <td class="px-3 py-2">
+                        <span class="{% if fd.field.classification == 'required' %}text-white font-medium{% elif fd.field.classification == 'core' %}text-gray-200{% else %}text-gray-400{% endif %}">
+                            {{ fd.field.normalized_name }}
+                        </span>
+                        {% if fd.field.description %}
+                        <p class="text-xs text-gray-500 mt-0.5">{{ fd.field.description }}</p>
+                        {% endif %}
+                    </td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex px-2 py-0.5 rounded text-xs
+                            {% if fd.field.classification == 'required' %}bg-red-900/30 text-red-300 border border-red-800/40
+                            {% elif fd.field.classification == 'core' %}bg-indigo-900/30 text-indigo-300 border border-indigo-800/40
+                            {% else %}bg-gray-800 text-gray-400 border border-gray-700{% endif %}">
+                            {{ fd.field.classification }}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-xs text-gray-400">{{ fd.field.data_type }}</td>
+                    <td class="px-3 py-2 text-center">
+                        <input type="checkbox"
+                               name="required_{{ item.config.source.id }}"
+                               value="{{ fd.field.id }}"
+                               {% if fd.is_required %}checked{% endif %}
+                               class="rounded bg-[#0f0f1a] border-[#2d2d44] text-red-500 focus:ring-red-500 focus:ring-offset-0">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+
+    <div class="flex items-center gap-3 mt-4">
+        <button type="submit"
+                class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors">
+            Save Profile
+        </button>
+        <a href="{% url 'profiles:edit_sources' profile.pk %}" class="text-sm text-gray-500 hover:text-gray-400 transition-colors">
+            ← Back to Sources
+        </a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function selectAll(sourceId) {
+    document.querySelectorAll('.source-field-' + sourceId).forEach(cb => cb.checked = true);
+}
+function selectNone(sourceId) {
+    document.querySelectorAll('.source-field-' + sourceId).forEach(cb => cb.checked = false);
+}
+</script>
+{% endblock %}
