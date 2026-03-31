@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -10,7 +11,16 @@ from django.utils import timezone
 from apps.core.enums import ResultStatus, VoteType
 from apps.investigations.models import Investigation, InvestigationResult
 
+from django.db import models as django_models
+from django.db.models.functions import Greatest
+
+from apps.users.models import UserReputation
+
 from .models import CommunityIndicator, CommunityNote, CommunityResult, ConfidenceVote
+
+# Max community result submissions per hour per user (throttle)
+_COMMUNITY_THROTTLE_LIMIT = 30
+_COMMUNITY_THROTTLE_WINDOW = 3600
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +123,20 @@ def share_investigation(request, investigation_pk):
         return redirect("investigations:detail", pk=investigation_pk)
 
     if request.method == "POST":
+        # Throttle: limit community submissions per user per hour
+        from django.core.cache import caches
+        cache = caches["rate_limit"]
+        throttle_key = f"community_share:{request.user.pk}"
+        if not cache.add(throttle_key, 1, timeout=_COMMUNITY_THROTTLE_WINDOW):
+            try:
+                count = cache.incr(throttle_key)
+            except ValueError:
+                cache.set(throttle_key, 1, timeout=_COMMUNITY_THROTTLE_WINDOW)
+                count = 1
+            if count > _COMMUNITY_THROTTLE_LIMIT:
+                messages.error(request, f"Sharing limit reached ({_COMMUNITY_THROTTLE_LIMIT}/hour). Please wait.")
+                return redirect("investigations:detail", pk=investigation_pk)
+
         with transaction.atomic():
             # Get or create community indicator
             ci, ci_created = CommunityIndicator.objects.get_or_create(
@@ -135,7 +159,9 @@ def share_investigation(request, investigation_pk):
 
             shared_count = 0
             for r in inv_results:
-                # Avoid duplicate field+source+value combos
+                source_ttl = r.source.default_ttl_seconds if r.source else 0
+                cutoff = timezone.now() - timedelta(seconds=source_ttl) if source_ttl > 0 else None
+
                 existing = CommunityResult.objects.filter(
                     community_indicator=ci,
                     source=r.source,
@@ -151,10 +177,25 @@ def share_investigation(request, investigation_pk):
                         contributed_by=request.user,
                     )
                     shared_count += 1
+                elif cutoff and existing.contributed_at < cutoff:
+                    # Stale result — update with fresh data
+                    CommunityResult.objects.filter(pk=existing.pk).update(
+                        value=r.value,
+                        contributed_by=request.user,
+                        contributed_at=timezone.now(),
+                    )
+                    shared_count += 1
+                # else: fresh existing result — skip
 
             # Mark investigation as shared
             investigation.shared_to_community = True
             investigation.save(update_fields=["shared_to_community"])
+
+            # Update contributor reputation
+            if shared_count > 0:
+                rep = UserReputation.get_or_create_for(request.user)
+                rep.total_contributions = django_models.F("total_contributions") + shared_count
+                rep.save(update_fields=["total_contributions"])
 
         messages.success(
             request,
@@ -209,6 +250,16 @@ def community_vote(request, result_pk, vote_type):
         ).count()
         community_result.confidence_votes = confirms - disputes
         community_result.save(update_fields=["confidence_votes"])
+
+    # Update contributor's reputation on dispute
+    if vote_type == VoteType.DISPUTE and community_result.contributed_by:
+        rep = UserReputation.get_or_create_for(community_result.contributed_by)
+        UserReputation.objects.filter(pk=rep.pk).update(
+            disputed_contributions=django_models.F("disputed_contributions") + 1,
+            reputation_score=Greatest(
+                django_models.F("reputation_score") - 10, 0
+            ),
+        )
 
     action = "confirmed" if vote_type == "confirm" else "disputed"
     messages.success(request, f"You {action} this result.")

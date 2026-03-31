@@ -14,6 +14,8 @@ Executes a full investigation:
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -102,6 +104,8 @@ class InvestigationOrchestrator:
         total_found = 0
         errors = []
 
+        # --- Phase 1: resolve adapters and expected fields (DB work, main thread) ---
+        configs_to_query = []
         for sc in source_configs:
             source = sc.source
             adapter = get_adapter(source.slug)
@@ -111,15 +115,10 @@ class InvestigationOrchestrator:
                 errors.append(f"No adapter for {source.name}")
                 continue
 
-            # Check adapter support using the GENERAL type (hash, ip, domain, url)
-            general_type = IOCType.get_general_type(storage_ioc_type)
             if not adapter.supports(storage_ioc_type):
                 logger.info(f"Adapter {source.slug} doesn't support {storage_ioc_type}, skipping")
                 continue
 
-            # Get expected field names for this source.
-            # Expected fields are linked to AvailableField which uses the PROFILE's ioc_type
-            # (e.g., hash_sha256), not the detected type (e.g., hash_md5).
             expected_fields_qs = sc.expected_fields.select_related("available_field")
             expected_field_names = [ef.available_field.normalized_name for ef in expected_fields_qs]
 
@@ -129,14 +128,55 @@ class InvestigationOrchestrator:
                     f"Profile ioc_type={profile_ioc_type}, storage ioc_type={storage_ioc_type}. "
                     f"Querying ALL fields instead."
                 )
-                # If no expected fields configured, query all fields (pass None)
                 expected_field_names_for_query = None
             else:
                 expected_field_names_for_query = expected_field_names
 
             total_expected += len(expected_field_names) if expected_field_names else 0
+            configs_to_query.append({
+                "source": source,
+                "adapter": adapter,
+                "expected_field_names": expected_field_names,
+                "expected_field_names_for_query": expected_field_names_for_query,
+                "timeout": sc.timeout_seconds,
+            })
 
-            # Execute the query
+        # --- Phase 2: execute all API queries in parallel (read-only DB + HTTP) ---
+        def _query_one(cfg):
+            source = cfg["source"]
+            adapter = cfg["adapter"]
+            expected_field_names = cfg["expected_field_names"]
+            expected_set = set(expected_field_names) if expected_field_names else set()
+
+            # Cache check: reuse InvestigationResult records for the same indicator + source
+            # if they were fetched within this source's TTL window.
+            ttl = source.default_ttl_seconds
+            if ttl > 0:
+                cutoff = timezone.now() - timedelta(seconds=ttl)
+                cached_qs = InvestigationResult.objects.filter(
+                    investigation__indicator=investigation.indicator,
+                    source=source,
+                    fetched_at__gte=cutoff,
+                ).exclude(investigation=investigation)
+                cached = list(cached_qs)
+                if cached:
+                    result_objects = [
+                        InvestigationResult(
+                            investigation=investigation,
+                            source=source,
+                            field_name=r.field_name,
+                            value=r.value,
+                            status=r.status,
+                            was_expected=(r.field_name in expected_set) if expected_set else True,
+                            response_time_ms=r.response_time_ms,
+                        )
+                        for r in cached
+                    ]
+                    found_count = sum(1 for r in cached if r.status == ResultStatus.FOUND)
+                    logger.info(f"  → {source.name}: cache hit ({len(cached)} results reused)")
+                    return source.name, "", result_objects, found_count
+
+            # Cache miss: call the API
             logger.info(
                 f"Querying {source.name} for {storage_ioc_type}:{ioc_value[:30]}... "
                 f"(expecting {len(expected_field_names) if expected_field_names else 'all'} fields)"
@@ -144,23 +184,13 @@ class InvestigationOrchestrator:
             adapter_response = adapter.query(
                 ioc_value=ioc_value,
                 ioc_type=storage_ioc_type,
-                expected_fields=expected_field_names_for_query,
-                timeout=sc.timeout_seconds,
+                expected_fields=cfg["expected_field_names_for_query"],
+                timeout=cfg["timeout"],
             )
-
-            if adapter_response.error:
-                errors.append(f"{source.name}: {adapter_response.error}")
-
-            # Save results
             result_objects = []
             found_fields = set()
-
             for ar in adapter_response.results:
-                is_expected = (
-                    ar.field_name in expected_field_names
-                    if expected_field_names
-                    else True
-                )
+                is_expected = (ar.field_name in expected_set) if expected_set else True
                 result_objects.append(
                     InvestigationResult(
                         investigation=investigation,
@@ -174,12 +204,28 @@ class InvestigationOrchestrator:
                 )
                 if ar.status == ResultStatus.FOUND:
                     found_fields.add(ar.field_name)
+            return source.name, adapter_response.error, result_objects, len(found_fields)
 
-            if result_objects:
-                InvestigationResult.objects.bulk_create(result_objects)
-                logger.info(f"  → {source.name}: saved {len(result_objects)} results, {len(found_fields)} found")
+        all_result_objects = []
+        max_workers = min(8, len(configs_to_query)) if configs_to_query else 1
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_query_one, cfg): cfg for cfg in configs_to_query}
+            for future in as_completed(futures, timeout=90):
+                try:
+                    source_name, error, result_objects, found_count = future.result()
+                    if error:
+                        errors.append(f"{source_name}: {error}")
+                    all_result_objects.extend(result_objects)
+                    total_found += found_count
+                    logger.info(f"  → {source_name}: {len(result_objects)} results, {found_count} found")
+                except Exception as exc:
+                    cfg = futures[future]
+                    errors.append(f"{cfg['source'].name}: unexpected error — {exc}")
+                    logger.exception(f"Unexpected error querying {cfg['source'].name}")
 
-            total_found += len(found_fields)
+        # --- Phase 3: persist all results in one batch ---
+        if all_result_objects:
+            InvestigationResult.objects.bulk_create(all_result_objects)
 
         # Calculate coverage and finalize
         if total_expected > 0:

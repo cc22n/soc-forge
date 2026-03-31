@@ -2,42 +2,37 @@
 Security middleware for SOC Forge.
 
 Provides:
-- Per-user API query rate limiting (in-memory, no Redis needed)
+- Per-user investigation rate limiting (cache-backed: Redis in production, LocMem in dev)
 - Input sanitization for IOC values
 - Additional security headers beyond Django defaults
 """
 
 import logging
 import re
-import time
-from collections import defaultdict
-from threading import Lock
 
-from django.http import JsonResponse
+from django.core.cache import caches
 
 logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware:
     """
-    Simple in-memory rate limiter for investigation queries.
-    Limits authenticated users to N investigation executions per minute.
+    Cache-backed rate limiter for investigation queries.
+    Limits authenticated users to N investigation submissions per minute.
 
-    This is a lightweight solution. For production with multiple workers,
-    replace with Redis-based rate limiting (django-ratelimit or custom).
+    Uses the 'rate_limit' cache alias (Redis if REDIS_URL is configured,
+    otherwise LocMemCache for development). Works correctly across multiple
+    Gunicorn workers when Redis is configured.
     """
 
-    # Max investigation submissions per minute per user
     RATE_LIMIT = 10
     WINDOW_SECONDS = 60
+    _CACHE_PREFIX = "rl:inv:"
 
     def __init__(self, get_response):
         self.get_response = get_response
-        self._requests = defaultdict(list)
-        self._lock = Lock()
 
     def __call__(self, request):
-        # Only rate-limit POST to investigation creation
         if (
             request.method == "POST"
             and request.path == "/investigations/new/"
@@ -50,33 +45,34 @@ class RateLimitMiddleware:
                     f"on {request.path}"
                 )
                 from django.contrib import messages
+                from django.shortcuts import redirect
 
                 messages.error(
                     request,
                     f"Rate limit exceeded. Maximum {self.RATE_LIMIT} investigations "
                     f"per minute. Please wait and try again.",
                 )
-                from django.shortcuts import redirect
-
                 return redirect("investigations:new")
 
         return self.get_response(request)
 
     def _allow_request(self, user_id: int) -> bool:
-        """Check if user is within rate limit."""
-        now = time.monotonic()
-        with self._lock:
-            # Clean old entries
-            self._requests[user_id] = [
-                t for t in self._requests[user_id]
-                if now - t < self.WINDOW_SECONDS
-            ]
-            # Check limit
-            if len(self._requests[user_id]) >= self.RATE_LIMIT:
-                return False
-            # Record this request
-            self._requests[user_id].append(now)
+        """
+        Returns True if the request is within the rate limit.
+        Uses atomic cache operations: add (create-if-missing) + incr.
+        """
+        cache = caches["rate_limit"]
+        key = f"{self._CACHE_PREFIX}{user_id}"
+        # add() sets key with value 1 only if it doesn't exist; returns True if created
+        if cache.add(key, 1, timeout=self.WINDOW_SECONDS):
             return True
+        try:
+            count = cache.incr(key)
+        except ValueError:
+            # Key expired between add() check and incr() — safe to allow and reset
+            cache.set(key, 1, timeout=self.WINDOW_SECONDS)
+            return True
+        return count <= self.RATE_LIMIT
 
 
 class SecurityHeadersMiddleware:

@@ -4,106 +4,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="SOC Forge — Customizable Threat Intelligence Investigation Engine">
+    <meta name="description" content="SOC Forge - Customizable Threat Intelligence Investigation Engine">
     <title>{% block title %}SOC Forge{% endblock %}</title>
-    <!-- Tailwind CDN for development -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #07080d;
+            --bg-secondary: #0e1018;
+            --bg-card: #12141e;
+            --bg-card-hover: #181b28;
+            --border: #1e2235;
+            --border-hover: #2a2f48;
+            --text-primary: #e8eaed;
+            --text-secondary: #8b8fa3;
+            --text-muted: #555872;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+        }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg-primary); color: var(--text-primary); }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Subtle grid texture on bg */
+        .bg-grid {
+            background-image:
+                linear-gradient(rgba(30, 34, 53, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30, 34, 53, 0.3) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* Card glow on hover */
+        .card-glow { transition: all 0.2s ease; border: 1px solid var(--border); }
+        .card-glow:hover {
+            border-color: var(--border-hover);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.06);
+        }
+
+        /* Staggered fade-in animation */
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in {
+            animation: fadeSlideUp 0.3s ease forwards;
+            opacity: 0;
+        }
+        .animate-in:nth-child(1) { animation-delay: 0.05s; }
+        .animate-in:nth-child(2) { animation-delay: 0.1s; }
+        .animate-in:nth-child(3) { animation-delay: 0.15s; }
+        .animate-in:nth-child(4) { animation-delay: 0.2s; }
+        .animate-in:nth-child(5) { animation-delay: 0.25s; }
+        .animate-in:nth-child(6) { animation-delay: 0.3s; }
+
+        /* Sidebar active indicator */
+        .nav-active { position: relative; }
+        .nav-active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: var(--accent);
+            border-radius: 0 3px 3px 0;
+        }
+
+        /* Coverage bar animation */
+        .coverage-fill {
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+        /* Badge variants */
+        .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; }
+        .badge-hash { background: rgba(139, 92, 246, 0.12); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.2); }
+        .badge-ip { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .badge-domain { background: rgba(245, 158, 11, 0.12); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.2); }
+        .badge-url { background: rgba(59, 130, 246, 0.12); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.2); }
+        .badge-success { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .badge-warning { background: rgba(245, 158, 11, 0.12); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.2); }
+        .badge-danger { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.2); }
+        .badge-neutral { background: rgba(85, 88, 114, 0.2); color: #8b8fa3; border: 1px solid rgba(85, 88, 114, 0.3); }
+
+        /* Pulse dot for active status */
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse-dot 2s ease infinite; }
+
+        /* Table row hover */
+        .table-row { transition: background 0.15s ease; }
+        .table-row:hover { background: rgba(30, 34, 53, 0.5); }
+
+        /* Input focus glow */
+        .input-glow:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* Button styles */
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary:hover { background: #5558e6; box-shadow: 0 0 16px var(--accent-glow); }
+        .btn-secondary {
+            background: rgba(30, 34, 53, 0.6);
+            color: var(--text-secondary);
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            border: 1px solid var(--border);
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-secondary:hover { background: rgba(42, 47, 72, 0.6); color: var(--text-primary); border-color: var(--border-hover); }
+    </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="h-full bg-[#0f0f1a] text-gray-200 antialiased">
+<body class="h-full antialiased">
     <div class="flex h-full">
         {% if user.is_authenticated %}
         <!-- Sidebar -->
-        <nav class="fixed inset-y-0 left-0 w-56 bg-[#1a1a2e] border-r border-[#2d2d44] flex flex-col">
+        <nav class="fixed inset-y-0 left-0 w-[220px] bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col z-50">
             <!-- Logo -->
-            <div class="px-5 py-5 border-b border-[#2d2d44]">
-                <h1 class="text-lg font-bold tracking-wider text-white">
-                    SOC <span class="text-indigo-400">FORGE</span>
-                </h1>
-                <p class="text-xs text-gray-500 mt-0.5">Threat Intelligence Engine</p>
+            <div class="px-5 py-5 border-b border-[var(--border)]">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-md bg-[var(--accent)] flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-sm font-bold tracking-wide text-white">SOC FORGE</h1>
+                        <p class="text-[10px] text-[var(--text-muted)] tracking-wider uppercase">Threat Intel Engine</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Navigation -->
-            <div class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <div class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+                {% with current_app=request.resolver_match.app_name current_url=request.resolver_match.url_name %}
                 <a href="{% url 'users:dashboard' %}"
-                   class="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-[#2d2d44] transition-colors {% if request.resolver_match.url_name == 'dashboard' %}bg-[#2d2d44] text-white{% else %}text-gray-400{% endif %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                   class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
+                   {% if current_url == 'dashboard' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                    <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z"/>
                     </svg>
                     Dashboard
                 </a>
-
                 <a href="{% url 'sources:list' %}"
-                   class="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-[#2d2d44] transition-colors {% if request.resolver_match.app_name == 'sources' %}bg-[#2d2d44] text-white{% else %}text-gray-400{% endif %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                   class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
+                   {% if current_app == 'sources' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                    <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
                     </svg>
                     Sources
                 </a>
-
                 <a href="{% url 'profiles:list' %}"
-                   class="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-[#2d2d44] transition-colors {% if request.resolver_match.app_name == 'profiles' %}bg-[#2d2d44] text-white{% else %}text-gray-400{% endif %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                   class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
+                   {% if current_app == 'profiles' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                    <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
                     </svg>
                     Profiles
                 </a>
-
                 <a href="{% url 'investigations:list' %}"
-                   class="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-[#2d2d44] transition-colors {% if request.resolver_match.app_name == 'investigations' %}bg-[#2d2d44] text-white{% else %}text-gray-400{% endif %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                   class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
+                   {% if current_app == 'investigations' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                    <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
                     Investigations
                 </a>
-
                 <a href="{% url 'community:search' %}"
-                   class="flex items-center gap-3 px-3 py-2 text-sm rounded-md hover:bg-[#2d2d44] transition-colors {% if request.resolver_match.app_name == 'community' %}bg-[#2d2d44] text-white{% else %}text-gray-400{% endif %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                   class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
+                   {% if current_app == 'community' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                    <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
                     </svg>
                     Community
                 </a>
+                {% endwith %}
             </div>
 
-            <!-- User info -->
-            <div class="px-4 py-3 border-t border-[#2d2d44]">
+            <!-- User -->
+            <div class="px-4 py-3 border-t border-[var(--border)]">
                 <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-medium text-gray-300">{{ user.username }}</p>
-                        <p class="text-xs text-gray-500">{{ user.get_role_display }}</p>
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-full bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-center text-[11px] font-semibold text-[var(--text-secondary)]">
+                            {{ user.username|make_list|first|upper }}
+                        </div>
+                        <div>
+                            <p class="text-[12px] font-medium text-[var(--text-primary)]">{{ user.username }}</p>
+                            <p class="text-[10px] text-[var(--text-muted)]">{{ user.get_role_display }}</p>
+                        </div>
                     </div>
-                    <a href="{% url 'logout' %}"
-                       class="text-xs text-gray-500 hover:text-red-400 transition-colors"
-                       title="Logout">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                        </svg>
-                    </a>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer bg-transparent border-none p-0" title="Sign out">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                            </svg>
+                        </button>
+                    </form>
                 </div>
             </div>
         </nav>
 
-        <!-- Main content -->
-        <main class="flex-1 ml-56 p-8">
+        <!-- Main -->
+        <main class="flex-1 ml-[220px] p-8 bg-grid min-h-screen">
         {% else %}
-        <main class="flex-1 p-8">
+        <main class="flex-1 bg-grid min-h-screen {% block main_class %}p-8{% endblock %}">
         {% endif %}
             <!-- Flash messages -->
             {% if messages %}
             <div class="mb-6 space-y-2">
                 {% for message in messages %}
-                <div class="px-4 py-3 rounded-md text-sm
-                    {% if message.tags == 'success' %}bg-emerald-900/40 text-emerald-300 border border-emerald-800
-                    {% elif message.tags == 'error' %}bg-red-900/40 text-red-300 border border-red-800
-                    {% elif message.tags == 'warning' %}bg-amber-900/40 text-amber-300 border border-amber-800
-                    {% else %}bg-indigo-900/40 text-indigo-300 border border-indigo-800{% endif %}">
+                <div class="animate-in px-4 py-3 rounded-md text-[13px] flex items-center gap-2
+                    {% if message.tags == 'success' %}bg-[rgba(16,185,129,0.08)] text-[#6ee7b7] border border-[rgba(16,185,129,0.2)]
+                    {% elif message.tags == 'error' %}bg-[rgba(239,68,68,0.08)] text-[#fca5a5] border border-[rgba(239,68,68,0.2)]
+                    {% elif message.tags == 'warning' %}bg-[rgba(245,158,11,0.08)] text-[#fcd34d] border border-[rgba(245,158,11,0.2)]
+                    {% else %}bg-[rgba(99,102,241,0.08)] text-[#a5b4fc] border border-[rgba(99,102,241,0.2)]{% endif %}">
                     {{ message }}
                 </div>
                 {% endfor %}

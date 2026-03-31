@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}SOC Forge — Threat Intelligence Engine{% endblock %}
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<div class="min-h-screen flex flex-col">
+
+    <!-- Nav bar público -->
+    <header class="flex items-center justify-between px-8 py-5 border-b border-[var(--border)]">
+        <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+            <span class="text-sm font-bold tracking-widest text-white uppercase">SOC Forge</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'login' %}" class="btn-secondary text-[13px]">Sign In</a>
+            <a href="{% url 'users:register' %}" class="btn-primary text-[13px]">Get Started</a>
+        </div>
+    </header>
+
+    <!-- Hero section -->
+    <section class="flex-1 flex flex-col items-center justify-center text-center px-6 py-24">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-glow)] border border-[rgba(99,102,241,0.25)] text-[11px] text-indigo-300 font-medium uppercase tracking-wider mb-6">
+            <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 inline-block"></span>
+            17 Threat Intelligence APIs
+        </div>
+
+        <h1 class="text-5xl font-bold text-white leading-tight max-w-3xl mb-6">
+            Investigate any IOC in
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">seconds</span>,
+            not hours
+        </h1>
+        <p class="text-[16px] text-[var(--text-secondary)] max-w-xl leading-relaxed mb-10">
+            SOC Forge queries 17 threat intelligence sources simultaneously, normalizes 244 fields into a unified view, and generates AI-powered analysis — so you can focus on decisions, not API-hopping.
+        </p>
+        <div class="flex items-center gap-4">
+            <a href="{% url 'users:register' %}" class="btn-primary px-6 py-3 text-[14px]">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Start Investigating — Free
+            </a>
+            <a href="{% url 'login' %}" class="btn-secondary px-6 py-3 text-[14px]">Sign In</a>
+        </div>
+    </section>
+
+    <!-- Stats bar -->
+    <section class="border-y border-[var(--border)] bg-[var(--bg-secondary)]">
+        <div class="max-w-4xl mx-auto grid grid-cols-4 divide-x divide-[var(--border)]">
+            <div class="px-8 py-6 text-center">
+                <p class="text-3xl font-bold text-white">17</p>
+                <p class="text-[12px] text-[var(--text-muted)] mt-1 uppercase tracking-wider">Intel Sources</p>
+            </div>
+            <div class="px-8 py-6 text-center">
+                <p class="text-3xl font-bold text-white">244</p>
+                <p class="text-[12px] text-[var(--text-muted)] mt-1 uppercase tracking-wider">Normalized Fields</p>
+            </div>
+            <div class="px-8 py-6 text-center">
+                <p class="text-3xl font-bold text-white">8</p>
+                <p class="text-[12px] text-[var(--text-muted)] mt-1 uppercase tracking-wider">Default Profiles</p>
+            </div>
+            <div class="px-8 py-6 text-center">
+                <p class="text-3xl font-bold text-indigo-400">Free</p>
+                <p class="text-[12px] text-[var(--text-muted)] mt-1 uppercase tracking-wider">Self-hosted</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features grid -->
+    <section class="max-w-5xl mx-auto px-6 py-20 w-full">
+        <h2 class="text-[11px] text-[var(--text-muted)] uppercase tracking-widest text-center mb-12">What SOC Forge does</h2>
+        <div class="grid grid-cols-3 gap-6">
+
+            <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                <div class="w-10 h-10 rounded-lg bg-indigo-900/40 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <h3 class="text-[14px] font-semibold text-white mb-2">Parallel Execution</h3>
+                <p class="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    All APIs queried simultaneously via ThreadPoolExecutor. What used to take 30 minutes of manual tab-switching now completes in seconds.
+                </p>
+            </div>
+
+            <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                <div class="w-10 h-10 rounded-lg bg-emerald-900/40 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <h3 class="text-[14px] font-semibold text-white mb-2">Unified Field Taxonomy</h3>
+                <p class="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    244 fields from 17 different APIs normalized into one schema. <code class="font-mono text-[11px] bg-[#1e2235] px-1 rounded">country</code>, <code class="font-mono text-[11px] bg-[#1e2235] px-1 rounded">asn</code>, and <code class="font-mono text-[11px] bg-[#1e2235] px-1 rounded">malware_family</code> mean the same thing everywhere.
+                </p>
+            </div>
+
+            <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                <div class="w-10 h-10 rounded-lg bg-violet-900/40 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <h3 class="text-[14px] font-semibold text-white mb-2">Community Knowledge Base</h3>
+                <p class="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    Share investigation results with your team. Confidence voting and reputation system prevent low-quality data from polluting the knowledge base.
+                </p>
+            </div>
+
+            <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                <div class="w-10 h-10 rounded-lg bg-amber-900/40 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <h3 class="text-[14px] font-semibold text-white mb-2">AI-Powered Summaries</h3>
+                <p class="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    Claude Haiku synthesizes all source results into a concise analyst brief with a clear action recommendation — no prompt engineering required.
+                </p>
+            </div>
+
+            <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                <div class="w-10 h-10 rounded-lg bg-sky-900/40 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <h3 class="text-[14px] font-semibold text-white mb-2">Security-First Design</h3>
+                <p class="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    Brute-force protection, cryptographic audit chain, private IP blocking, CSRF, rate limiting, and OWASP-aware middleware baked in from day one.
+                </p>
+            </div>
+
+            <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                <div class="w-10 h-10 rounded-lg bg-rose-900/40 flex items-center justify-center mb-4">
+                    <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                </div>
+                <h3 class="text-[14px] font-semibold text-white mb-2">STIX 2.1 Export</h3>
+                <p class="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+                    Export any investigation as a spec-compliant STIX 2.1 Bundle JSON — ready to ingest into SIEMs, TIPs, or share with other teams.
+                </p>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- IOC types section -->
+    <section class="border-t border-[var(--border)] bg-[var(--bg-secondary)] py-14">
+        <div class="max-w-4xl mx-auto px-6 text-center">
+            <p class="text-[11px] text-[var(--text-muted)] uppercase tracking-widest mb-6">Supported IOC types</p>
+            <div class="flex items-center justify-center flex-wrap gap-3">
+                <span class="badge badge-ip px-4 py-1.5 text-[12px]">IPv4 / IPv6</span>
+                <span class="badge badge-domain px-4 py-1.5 text-[12px]">Domain</span>
+                <span class="badge badge-url px-4 py-1.5 text-[12px]">URL</span>
+                <span class="badge badge-hash px-4 py-1.5 text-[12px]">MD5</span>
+                <span class="badge badge-hash px-4 py-1.5 text-[12px]">SHA-1</span>
+                <span class="badge badge-hash px-4 py-1.5 text-[12px]">SHA-256</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA final -->
+    <section class="py-20 text-center px-6">
+        <h2 class="text-3xl font-bold text-white mb-4">Ready to start?</h2>
+        <p class="text-[14px] text-[var(--text-secondary)] mb-8 max-w-md mx-auto">
+            Create a free account and run your first investigation in under a minute. No credit card required.
+        </p>
+        <a href="{% url 'users:register' %}" class="btn-primary px-8 py-3 text-[14px]">
+            Create Free Account
+        </a>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-[var(--border)] py-6 text-center">
+        <p class="text-[11px] text-[var(--text-muted)]">
+            SOC Forge — Self-hosted Threat Intelligence Engine &nbsp;·&nbsp;
+            <a href="{% url 'login' %}" class="hover:text-[var(--accent)] transition-colors">Sign In</a>
+        </p>
+    </footer>
+
+</div>
+{% endblock %}

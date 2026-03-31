@@ -173,6 +173,10 @@ class InvestigationResult(models.Model):
         blank=True,
         help_text="Original API response for debugging (optional, can be large).",
     )
+    schema_version = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Version of the normalization schema used when this result was fetched.",
+    )
     fetched_at = models.DateTimeField(
         auto_now_add=True,
         db_index=True,

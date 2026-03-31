@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Create Account — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center">
+    <div class="w-full max-w-sm">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-xl bg-[var(--accent)] flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-wide text-white">SOC FORGE</h1>
+            <p class="text-[12px] text-[var(--text-muted)] mt-1 uppercase tracking-widest">Threat Intelligence Engine</p>
+        </div>
+
+        <!-- Form -->
+        <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+            <h2 class="text-[15px] font-semibold text-white mb-5">Create your account</h2>
+
+            {% if messages %}
+            {% for message in messages %}
+            <div class="mb-4 px-3 py-2.5 rounded-md text-[13px]
+                {% if message.tags == 'error' %}bg-[rgba(239,68,68,0.08)] text-[var(--danger)] border border-[rgba(239,68,68,0.2)]
+                {% else %}bg-[rgba(16,185,129,0.08)] text-[#6ee7b7] border border-[rgba(16,185,129,0.2)]{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <form method="post" novalidate class="space-y-4">
+                {% csrf_token %}
+
+                <!-- Username -->
+                <div>
+                    <label for="id_username" class="block text-[12px] text-[var(--text-secondary)] mb-1.5 font-medium">
+                        Username
+                    </label>
+                    <input type="text" name="username" id="id_username"
+                           value="{{ form.username.value|default:'' }}"
+                           autocomplete="username" autofocus maxlength="150"
+                           class="w-full px-3 py-2.5 bg-[var(--bg-primary)] border rounded-lg text-white text-[13px] input-glow outline-none transition-all placeholder-[var(--text-muted)]
+                           {% if form.username.errors %}border-[var(--danger)]{% else %}border-[var(--border)]{% endif %}"
+                           placeholder="analyst_01">
+                    {% if form.username.errors %}
+                    <p class="mt-1 text-[11px] text-[var(--danger)]">{{ form.username.errors.0 }}</p>
+                    {% else %}
+                    <p class="mt-1 text-[11px] text-[var(--text-muted)]">Letters, numbers, _ and - only.</p>
+                    {% endif %}
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label for="id_email" class="block text-[12px] text-[var(--text-secondary)] mb-1.5 font-medium">
+                        Email
+                    </label>
+                    <input type="email" name="email" id="id_email"
+                           value="{{ form.email.value|default:'' }}"
+                           autocomplete="email" maxlength="254"
+                           class="w-full px-3 py-2.5 bg-[var(--bg-primary)] border rounded-lg text-white text-[13px] input-glow outline-none transition-all placeholder-[var(--text-muted)]
+                           {% if form.email.errors %}border-[var(--danger)]{% else %}border-[var(--border)]{% endif %}"
+                           placeholder="analyst@corp.com">
+                    {% if form.email.errors %}
+                    <p class="mt-1 text-[11px] text-[var(--danger)]">{{ form.email.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="id_password1" class="block text-[12px] text-[var(--text-secondary)] mb-1.5 font-medium">
+                        Password
+                    </label>
+                    <input type="password" name="password1" id="id_password1"
+                           autocomplete="new-password"
+                           class="w-full px-3 py-2.5 bg-[var(--bg-primary)] border rounded-lg text-white text-[13px] input-glow outline-none transition-all placeholder-[var(--text-muted)]
+                           {% if form.password1.errors %}border-[var(--danger)]{% else %}border-[var(--border)]{% endif %}"
+                           placeholder="At least 10 characters">
+                    {% if form.password1.errors %}
+                    <p class="mt-1 text-[11px] text-[var(--danger)]">{{ form.password1.errors.0 }}</p>
+                    {% else %}
+                    <p class="mt-1 text-[11px] text-[var(--text-muted)]">Min 10 characters. Cannot be too common or similar to your username.</p>
+                    {% endif %}
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="id_password2" class="block text-[12px] text-[var(--text-secondary)] mb-1.5 font-medium">
+                        Confirm password
+                    </label>
+                    <input type="password" name="password2" id="id_password2"
+                           autocomplete="new-password"
+                           class="w-full px-3 py-2.5 bg-[var(--bg-primary)] border rounded-lg text-white text-[13px] input-glow outline-none transition-all placeholder-[var(--text-muted)]
+                           {% if form.password2.errors %}border-[var(--danger)]{% else %}border-[var(--border)]{% endif %}"
+                           placeholder="Repeat password">
+                    {% if form.password2.errors %}
+                    <p class="mt-1 text-[11px] text-[var(--danger)]">{{ form.password2.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <button type="submit" class="btn-primary w-full justify-center py-2.5 mt-2">
+                    Create Account
+                </button>
+            </form>
+        </div>
+
+        <!-- Sign in link -->
+        <p class="text-center text-[12px] text-[var(--text-muted)] mt-4">
+            Already have an account?
+            <a href="{% url 'login' %}" class="text-[var(--accent)] hover:underline">Sign in</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

@@ -15,10 +15,18 @@ django-extensions>=3.2
 django-filter>=24.0
 whitenoise>=6.7
 
-# API Calls (needed from Phase 4, but install now)
+# API Calls
 requests>=2.32
 
-# Future phases
-# celery>=5.4
-# django-celery-beat>=2.6
-# redis>=5.0
+# REST API
+djangorestframework>=3.17
+
+# Async task queue
+celery[redis]>=5.4
+redis>=5.0
+
+# LLM integration
+# anthropic  — Anthropic Claude (default provider)
+# openai     — OpenAI ChatGPT; also covers Groq, xAI Grok, and Gemini (OpenAI-compatible APIs)
+anthropic>=0.40
+openai>=1.0

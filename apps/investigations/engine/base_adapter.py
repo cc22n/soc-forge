@@ -43,7 +43,8 @@ class AdapterResult:
 class AdapterResponse:
     """Full response from an adapter — all fields + metadata."""
 
-    def __init__(self):
+    def __init__(self, source_slug: str = ""):
+        self.source_slug: str = source_slug
         self.results: list[AdapterResult] = []
         self.response_time_ms: int = 0
         self.raw_response: dict | None = None
@@ -103,7 +104,7 @@ class BaseAdapter(ABC):
         Returns:
             AdapterResponse with results and metadata
         """
-        response = AdapterResponse()
+        response = AdapterResponse(source_slug=self.SOURCE_SLUG)
         timeout = timeout or self.DEFAULT_TIMEOUT
 
         try:

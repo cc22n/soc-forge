@@ -1,21 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Login — SOC Forge{% endblock %}
+{% block title %}Sign In — SOC Forge{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex items-center justify-center -mt-20">
+<div class="min-h-[80vh] flex items-center justify-center">
     <div class="w-full max-w-sm">
+        <!-- Logo -->
         <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold tracking-wider text-white">
-                SOC <span class="text-indigo-400">FORGE</span>
-            </h1>
-            <p class="text-sm text-gray-500 mt-2">Threat Intelligence Investigation Engine</p>
+            <div class="w-12 h-12 rounded-xl bg-[var(--accent)] flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-wide text-white">SOC FORGE</h1>
+            <p class="text-[12px] text-[var(--text-muted)] mt-1 uppercase tracking-widest">Threat Intelligence Engine</p>
         </div>
 
-        <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6">
-            <h2 class="text-lg font-semibold text-gray-200 mb-4">Sign In</h2>
+        <!-- Form -->
+        <div class="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+            <h2 class="text-[15px] font-semibold text-white mb-5">Sign in to continue</h2>
 
             {% if form.errors %}
-            <div class="mb-4 px-4 py-3 rounded-md bg-red-900/40 text-red-300 border border-red-800 text-sm">
+            <div class="mb-4 px-3 py-2.5 rounded-md bg-[rgba(239,68,68,0.08)] text-[var(--danger)] border border-[rgba(239,68,68,0.2)] text-[13px]">
                 Invalid username or password.
             </div>
             {% endif %}
@@ -23,23 +28,28 @@
             <form method="post" class="space-y-4">
                 {% csrf_token %}
                 <div>
-                    <label for="id_username" class="block text-sm text-gray-400 mb-1">Username</label>
+                    <label for="id_username" class="block text-[12px] text-[var(--text-secondary)] mb-1.5 font-medium">Username</label>
                     <input type="text" name="username" id="id_username" autofocus
-                           class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
-                                  focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                           class="w-full px-3 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-white text-[13px] input-glow outline-none transition-all placeholder-[var(--text-muted)]"
+                           placeholder="Enter your username">
                 </div>
                 <div>
-                    <label for="id_password" class="block text-sm text-gray-400 mb-1">Password</label>
+                    <label for="id_password" class="block text-[12px] text-[var(--text-secondary)] mb-1.5 font-medium">Password</label>
                     <input type="password" name="password" id="id_password"
-                           class="w-full px-3 py-2 bg-[#0f0f1a] border border-[#2d2d44] rounded-md text-gray-200 text-sm
-                                  focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                           class="w-full px-3 py-2.5 bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg text-white text-[13px] input-glow outline-none transition-all placeholder-[var(--text-muted)]"
+                           placeholder="Enter your password">
                 </div>
-                <button type="submit"
-                        class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-md transition-colors">
+                <button type="submit" class="btn-primary w-full justify-center py-2.5 mt-2">
                     Sign In
                 </button>
             </form>
         </div>
+
+        <!-- Register link -->
+        <p class="text-center text-[12px] text-[var(--text-muted)] mt-4">
+            Don't have an account?
+            <a href="{% url 'users:register' %}" class="text-[var(--accent)] hover:underline">Create account</a>
+        </p>
     </div>
 </div>
 {% endblock %}

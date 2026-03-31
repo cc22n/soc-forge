@@ -48,6 +48,8 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "django_filters",
     "axes",
+    "rest_framework",
+    "rest_framework.authtoken",
 ]
 
 LOCAL_APPS = [
@@ -56,6 +58,7 @@ LOCAL_APPS = [
     "apps.profiles",
     "apps.investigations",
     "apps.community",
+    "apps.api",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -93,7 +96,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 LOGIN_URL = "/auth/login/"
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/auth/login/"
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -180,6 +183,23 @@ AXES_RESET_ON_SUCCESS = True
 # ============================================
 # Threat Intelligence API Keys
 # ============================================
+# ============================================
+# LLM — Multi-provider support
+# LLM_PROVIDER: anthropic | openai | groq | grok | gemini  (default: anthropic)
+# LLM_MODEL: optional override — leave blank to use each provider's default
+# ============================================
+LLM_PROVIDER = env("LLM_PROVIDER", default="anthropic")
+LLM_MODEL = env("LLM_MODEL", default="")
+
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+GROQ_API_KEY = env("GROQ_API_KEY", default="")
+GROK_API_KEY = env("GROK_API_KEY", default="")
+GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+
+# ============================================
+# Threat Intelligence API Keys
+# ============================================
 THREAT_INTEL_KEYS = {
     "virustotal": env("VIRUSTOTAL_API_KEY", default=""),
     "abuseipdb": env("ABUSEIPDB_API_KEY", default=""),
@@ -197,6 +217,66 @@ THREAT_INTEL_KEYS = {
     "ipqualityscore": env("IPQUALITYSCORE_API_KEY", default=""),
     "censys_id": env("CENSYS_API_ID", default=""),
     "censys_secret": env("CENSYS_API_SECRET", default=""),
+}
+
+# ============================================
+# Celery
+# ============================================
+CELERY_BROKER_URL = env("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://localhost:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_ROUTES = {
+    "apps.investigations.tasks.run_investigation_task": {
+        "queue": "full_investigation",
+    },
+}
+CELERY_TASK_QUEUES_MAX_PRIORITY = 10
+CELERY_TASK_DEFAULT_PRIORITY = 5
+
+# ============================================
+# Django REST Framework
+# ============================================
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "60/minute",
+    },
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+}
+
+# ============================================
+# Cache (LocMem by default; Redis if REDIS_URL is set)
+# ============================================
+_REDIS_URL = env("REDIS_URL", default="")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    },
+    "rate_limit": (
+        {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _REDIS_URL,
+        }
+        if _REDIS_URL
+        else {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "rate_limit",
+        }
+    ),
 }
 
 # ============================================

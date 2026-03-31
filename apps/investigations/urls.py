@@ -8,4 +8,6 @@ urlpatterns = [
     path("", views.investigation_list, name="list"),
     path("new/", views.investigation_new, name="new"),
     path("<int:pk>/", views.investigation_detail, name="detail"),
+    path("<int:pk>/export/stix/", views.investigation_export_stix, name="export_stix"),
+    path("<int:pk>/summary/", views.investigation_generate_summary, name="generate_summary"),
 ]

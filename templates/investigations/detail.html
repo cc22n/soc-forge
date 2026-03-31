@@ -29,6 +29,22 @@
             </div>
         </div>
         <div class="flex items-center gap-2">
+            <button id="btn-summary"
+               onclick="generateSummary({{ investigation.pk }}, '{% url 'investigations:generate_summary' investigation.pk %}')"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white text-xs rounded-md transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                <span id="btn-summary-text">Generar resumen</span>
+            </button>
+            <a href="{% url 'investigations:export_stix' investigation.pk %}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs rounded-md transition-colors"
+               title="Download STIX 2.1 Bundle">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                STIX 2.1
+            </a>
             {% if not investigation.shared_to_community %}
             <a href="{% url 'community:share' investigation.pk %}"
                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded-md transition-colors">
@@ -98,11 +114,51 @@
     {% endif %}
 </div>
 
+<!-- LLM Summary Panel (hidden until generated) -->
+<div id="summary-panel" class="hidden bg-[#1a1a2e] border border-indigo-800/50 rounded-lg p-5 mb-6">
+    <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-md bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+            </svg>
+        </div>
+        <div class="flex-1">
+            <p class="text-[11px] text-indigo-400 uppercase tracking-wider font-medium mb-2">Resumen IA — <span id="summary-provider">…</span></p>
+            <p id="summary-text" class="text-sm text-gray-200 leading-relaxed"></p>
+            <div id="recommendation-block" class="hidden mt-3 pt-3 border-t border-indigo-800/30">
+                <p class="text-[11px] text-indigo-400 uppercase tracking-wider font-medium mb-1">Recomendación</p>
+                <p id="recommendation-text" class="text-sm text-amber-200 leading-relaxed"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Results by source -->
 {% for source_name, source_data in results_by_source.items %}
 <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg mb-4 overflow-hidden">
     <div class="px-5 py-3 border-b border-[#2d2d44] flex items-center justify-between bg-[#1e1e35]">
         <div class="flex items-center gap-3">
+            {% if source_data.adapter_status == "success" %}
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-800/50" title="All queries successful">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                OK
+            </span>
+            {% elif source_data.adapter_status == "partial" %}
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-amber-900/40 text-amber-400 border border-amber-800/50" title="Some fields had errors">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                Partial
+            </span>
+            {% elif source_data.adapter_status == "error" %}
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-red-900/40 text-red-400 border border-red-800/50" title="Query failed">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                Error
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-800 text-gray-500 border border-gray-700" title="No data found">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+                No data
+            </span>
+            {% endif %}
             <h3 class="text-sm font-semibold text-white">{{ source_name }}</h3>
             <span class="text-xs text-gray-500">
                 {{ source_data.found }}/{{ source_data.total }} fields found
@@ -162,4 +218,52 @@
     No results found for this investigation.
 </div>
 {% endfor %}
+
+<script>
+function generateSummary(pk, url) {
+    const btn = document.getElementById('btn-summary');
+    const btnText = document.getElementById('btn-summary-text');
+    const panel = document.getElementById('summary-panel');
+    const summaryText = document.getElementById('summary-text');
+    const recBlock = document.getElementById('recommendation-block');
+    const recText = document.getElementById('recommendation-text');
+
+    btn.disabled = true;
+    btnText.textContent = 'Generando…';
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        panel.classList.remove('hidden');
+        if (data.error) {
+            summaryText.textContent = 'Error: ' + data.error;
+            summaryText.classList.add('text-red-400');
+            document.getElementById('summary-provider').textContent = '';
+        } else {
+            summaryText.classList.remove('text-red-400');
+            summaryText.textContent = data.summary || '(sin datos)';
+            document.getElementById('summary-provider').textContent = data.provider || '';
+            if (data.recommendation) {
+                recText.textContent = data.recommendation;
+                recBlock.classList.remove('hidden');
+            }
+        }
+        btn.disabled = false;
+        btnText.textContent = 'Regenerar resumen';
+    })
+    .catch(err => {
+        panel.classList.remove('hidden');
+        summaryText.textContent = 'Error de red: ' + err;
+        summaryText.classList.add('text-red-400');
+        btn.disabled = false;
+        btnText.textContent = 'Reintentar';
+    });
+}
+</script>
 {% endblock %}

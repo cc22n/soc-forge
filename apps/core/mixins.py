@@ -19,3 +19,33 @@ class TimestampMixin(models.Model):
 
     class Meta:
         abstract = True
+
+
+def org_investigations_filter(user):
+    """
+    Return a Q filter for investigations visible to a user.
+
+    - If the user belongs to an organization: show all investigations
+      from members of the same org.
+    - Otherwise: show only the user's own investigations.
+
+    Usage:
+        from apps.core.mixins import org_investigations_filter
+        qs = Investigation.objects.filter(org_investigations_filter(request.user))
+    """
+    from django.db.models import Q
+
+    if user.organization_id:
+        return Q(analyst__organization=user.organization)
+    return Q(analyst=user)
+
+
+def user_can_access_investigation(user, investigation) -> bool:
+    """
+    Check if a user has read access to an investigation.
+
+    Org members share access; solo users can only see their own.
+    """
+    if user.organization_id and investigation.analyst.organization_id == user.organization_id:
+        return True
+    return investigation.analyst_id == user.pk

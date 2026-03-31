@@ -6,10 +6,26 @@ Usage:
     from apps.core.validators import validate_ioc, detect_ioc_type
 """
 
+import ipaddress
 import re
 from ipaddress import IPv4Address, IPv6Address
 
 from django.core.exceptions import ValidationError
+
+_PRIVATE_NETWORKS = [
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+    ipaddress.IPv4Network("127.0.0.0/8"),       # loopback
+    ipaddress.IPv4Network("169.254.0.0/16"),    # link-local
+    ipaddress.IPv4Network("100.64.0.0/10"),     # shared address space
+    ipaddress.IPv4Network("0.0.0.0/8"),         # "this" network
+    ipaddress.IPv4Network("224.0.0.0/4"),       # multicast
+    ipaddress.IPv4Network("240.0.0.0/4"),       # reserved
+    ipaddress.IPv6Network("::1/128"),           # IPv6 loopback
+    ipaddress.IPv6Network("fc00::/7"),          # IPv6 unique local
+    ipaddress.IPv6Network("fe80::/10"),         # IPv6 link-local
+]
 
 # Compiled patterns for performance
 MD5_PATTERN = re.compile(r"^[a-fA-F0-9]{32}$")
@@ -49,16 +65,24 @@ def validate_sha256(value: str) -> None:
 
 
 def validate_ip(value: str) -> None:
-    """Validate IPv4 or IPv6 address format."""
+    """Validate IPv4 or IPv6 address format and reject private/reserved ranges."""
     try:
-        IPv4Address(value)
+        addr = IPv4Address(value)
+        ip_obj = ipaddress.IPv4Address(value)
     except ValueError:
         try:
-            IPv6Address(value)
+            addr = IPv6Address(value)
+            ip_obj = ipaddress.IPv6Address(value)
         except ValueError:
             raise ValidationError(
                 "Invalid IP address format.",
                 code="invalid_ip",
+            )
+    for network in _PRIVATE_NETWORKS:
+        if ip_obj in network:
+            raise ValidationError(
+                f"IP {value} is in a private or reserved range and cannot be queried against external threat intelligence sources.",
+                code="private_ip",
             )
 
 
