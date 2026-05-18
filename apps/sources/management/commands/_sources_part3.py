@@ -139,7 +139,32 @@ IPINFO = {
 }
 
 
-SOURCES_PART3 = [CRIMINAL_IP, IPQUALITYSCORE, CENSYS, MALWARE_BAZAAR, IPINFO]
+# ============================================================================
+# 18. IPGeolocation
+# ============================================================================
+IPGEOLOCATION = {
+    "name": "IPGeolocation", "slug": "ipgeolocation",
+    "base_url": "https://api.ipgeolocation.io/v3",
+    "auth_type": "query_param", "env_var_name": "IPGEOLOCATION_API_KEY",
+    "supported_ioc_types": ["ip"],
+    "rate_limit_per_minute": 1, "default_ttl_seconds": 604800, "priority": 18,
+    "description": "IP geolocation with country, city, ASN, timezone and currency. Free plan: 1000 req/day.",
+    "fields": [
+        _f("ip", "country", "location.country_name", "core"),
+        _f("ip", "country_code", "location.country_code2", "core"),
+        _f("ip", "city", "location.city", "optional"),
+        _f("ip", "region", "location.state_prov", "optional"),
+        _f("ip", "latitude", "location.latitude", "optional", "float"),
+        _f("ip", "longitude", "location.longitude", "optional", "float"),
+        _f("ip", "asn", "asn.as_number", "core"),
+        _f("ip", "org", "asn.organization", "core"),
+        _f("ip", "time_zone", "time_zone.name", "optional"),
+        _f("ip", "currency", "currency.code", "optional"),
+    ],
+}
+
+
+SOURCES_PART3 = [CRIMINAL_IP, IPQUALITYSCORE, CENSYS, MALWARE_BAZAAR, IPINFO, IPGEOLOCATION]
 
 
 # ============================================================================

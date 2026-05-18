@@ -217,6 +217,7 @@ THREAT_INTEL_KEYS = {
     "ipqualityscore": env("IPQUALITYSCORE_API_KEY", default=""),
     "censys_id": env("CENSYS_API_ID", default=""),
     "censys_secret": env("CENSYS_API_SECRET", default=""),
+    "ipgeolocation": env("IPGEOLOCATION_API_KEY", default=""),
 }
 
 # ============================================

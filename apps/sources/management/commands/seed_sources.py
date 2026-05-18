@@ -87,7 +87,7 @@ class Command(BaseCommand):
 
             AvailableField.objects.bulk_create(field_objects)
             fields_created += len(field_objects)
-            self.stdout.write(f"    └── {len(field_objects)} fields")
+            self.stdout.write(f"    +-- {len(field_objects)} fields")
 
             # Put fields back in dict for potential reuse
             source_data["fields"] = fields
@@ -177,7 +177,7 @@ class Command(BaseCommand):
                         )
                     )
                 ExpectedField.objects.bulk_create(field_objects)
-                self.stdout.write(f"    └── {source.name}: {len(field_objects)} expected fields")
+                self.stdout.write(f"    +-- {source.name}: {len(field_objects)} expected fields")
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS(f"Profiles: {profiles_created} created."))

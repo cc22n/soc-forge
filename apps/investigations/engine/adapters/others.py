@@ -355,3 +355,45 @@ class IPInfoAdapter(BaseAdapter):
         self._collect(results, "is_proxy", privacy.get("proxy"), expected_fields)
         self._collect(results, "is_tor", privacy.get("tor"), expected_fields)
         return results
+
+
+class IPGeolocationAdapter(BaseAdapter):
+    SOURCE_SLUG = "ipgeolocation"
+    SUPPORTED_IOC_TYPES = ["ip"]
+
+    def _build_request(self, ioc_value, ioc_type):
+        return {
+            "url": "https://api.ipgeolocation.io/v3/ipgeo",
+            "params": {"apiKey": self.api_key, "ip": ioc_value},
+        }
+
+    def _parse_response(self, raw, ioc_type, expected_fields):
+        results = []
+        location = raw.get("location", {}) or {}
+        asn_data = raw.get("asn", {}) or {}
+        tz = raw.get("time_zone", {}) or {}
+        currency = raw.get("currency", {}) or {}
+
+        self._collect(results, "country", location.get("country_name"), expected_fields)
+        self._collect(results, "country_code", location.get("country_code2"), expected_fields)
+        self._collect(results, "city", location.get("city"), expected_fields)
+        self._collect(results, "region", location.get("state_prov"), expected_fields)
+
+        # Latitude and longitude arrive as strings from the API
+        try:
+            lat = float(location["latitude"]) if location.get("latitude") else None
+        except (ValueError, TypeError):
+            lat = None
+        try:
+            lng = float(location["longitude"]) if location.get("longitude") else None
+        except (ValueError, TypeError):
+            lng = None
+        self._collect(results, "latitude", lat, expected_fields)
+        self._collect(results, "longitude", lng, expected_fields)
+
+        self._collect(results, "asn", asn_data.get("as_number"), expected_fields)
+        self._collect(results, "org", asn_data.get("organization"), expected_fields)
+        self._collect(results, "time_zone", tz.get("name"), expected_fields)
+        self._collect(results, "currency", currency.get("code"), expected_fields)
+
+        return results

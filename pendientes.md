@@ -77,13 +77,13 @@ El archivo `integrar-ipgeolocation-plan-gratis.md` documenta la integración pen
 
 **Plan gratuito:** 1000 créditos/día, sin tarjeta. Endpoint: `https://api.ipgeolocation.io/v3/ipgeo`
 
-- [ ] **TASK-025** — Crear `IPGeolocationAdapter` en `adapters/others.py`
+- [x] **TASK-025** — Crear `IPGeolocationAdapter` en `adapters/others.py`
   - `SOURCE_SLUG = "ipgeolocation"`, `SUPPORTED_IOC_TYPES = ["ip"]`
   - Campos: `country`, `city`, `region`, `latitude`, `longitude`, `org`, `asn`, `time_zone`, `currency`
   - `env_var_name = "IPGEOLOCATION_API_KEY"`
-- [ ] **TASK-026** — Registrar adaptador en `registry.py`
-- [ ] **TASK-027** — Agregar fuente en `_sources_part3.py` y ejecutar `seed_sources`
-- [ ] **TASK-028** — Agregar key en `.env.example` y settings
+- [x] **TASK-026** — Registrar adaptador en `registry.py`
+- [x] **TASK-027** — Agregar fuente en `_sources_part3.py` y ejecutar `seed_sources` (fuente #18, 10 campos)
+- [x] **TASK-028** — Agregar key en `.env.example` y settings
 
 ---
 

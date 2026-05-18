@@ -18,6 +18,7 @@ from .adapters.others import (
     IPQualityScoreAdapter,
     CensysAdapter,
     IPInfoAdapter,
+    IPGeolocationAdapter,
 )
 
 # slug → adapter class
@@ -39,6 +40,7 @@ ADAPTER_REGISTRY: dict[str, type] = {
     "ipqualityscore": IPQualityScoreAdapter,
     "censys": CensysAdapter,
     "ipinfo": IPInfoAdapter,
+    "ipgeolocation": IPGeolocationAdapter,
 }
 
 
