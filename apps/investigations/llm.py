@@ -105,13 +105,26 @@ def call_llm(prompt: str) -> str:
 
 # ─── Private helpers ─────────────────────────────────────────────────────────
 
+# LLM request timeout in seconds — keeps the investigation pipeline from
+# hanging indefinitely if a provider is slow or unreachable.
+_LLM_TIMEOUT = 30
+
+# Module-level client cache keyed by (provider, api_key, base_url).
+# Avoids reconstructing TCP connection pools on every summary request.
+_client_cache: dict = {}
+
+
 def _anthropic(api_key: str, model: str, prompt: str) -> str:
     import anthropic  # noqa: PLC0415
-    client = anthropic.Anthropic(api_key=api_key)
+    cache_key = ("anthropic", api_key)
+    if cache_key not in _client_cache:
+        _client_cache[cache_key] = anthropic.Anthropic(api_key=api_key)
+    client = _client_cache[cache_key]
     msg = client.messages.create(
         model=model,
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
+        timeout=_LLM_TIMEOUT,
     )
     return msg.content[0].text.strip()
 
@@ -119,13 +132,18 @@ def _anthropic(api_key: str, model: str, prompt: str) -> str:
 def _openai_compat(provider: str, api_key: str, model: str, prompt: str) -> str:
     """Handles openai, groq, grok, and gemini (all OpenAI-compatible)."""
     from openai import OpenAI  # noqa: PLC0415
-    kwargs: dict = {"api_key": api_key}
-    if provider in _OPENAI_COMPAT_URLS:
-        kwargs["base_url"] = _OPENAI_COMPAT_URLS[provider]
-    client = OpenAI(**kwargs)
+    base_url = _OPENAI_COMPAT_URLS.get(provider)
+    cache_key = (provider, api_key, base_url)
+    if cache_key not in _client_cache:
+        kwargs: dict = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        _client_cache[cache_key] = OpenAI(**kwargs)
+    client = _client_cache[cache_key]
     resp = client.chat.completions.create(
         model=model,
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
+        timeout=_LLM_TIMEOUT,
     )
     return resp.choices[0].message.content.strip()

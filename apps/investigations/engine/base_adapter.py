@@ -69,11 +69,24 @@ class BaseAdapter(ABC):
     And implement:
         _build_request(ioc_value, ioc_type) → dict with url, headers, params, etc.
         _parse_response(raw_json, ioc_type, expected_fields) → list[AdapterResult]
+
+    Optional class-level flags:
+        REQUIRES_API_KEY — set False for APIs that work without authentication
+                           (URLhaus, MalwareBazaar, ThreatFox). When True and the
+                           key is empty, the query is skipped cleanly instead of
+                           making a request that will 401.
+        NOT_FOUND_IS_VALID — set True for sources where HTTP 404 means "this IOC
+                              is not in our database" (GreyNoise, Shodan,
+                              SecurityTrails). Without this flag a 404 is logged
+                              as a SourceUnavailableError which fills logs with
+                              false positives for unknown IPs/domains.
     """
 
     SOURCE_SLUG: str = ""
     SUPPORTED_IOC_TYPES: list[str] = []
     DEFAULT_TIMEOUT: int = 30
+    REQUIRES_API_KEY: bool = True
+    NOT_FOUND_IS_VALID: bool = False
 
     def __init__(self):
         self.api_key = self._get_api_key()
@@ -107,6 +120,17 @@ class BaseAdapter(ABC):
         response = AdapterResponse(source_slug=self.SOURCE_SLUG)
         timeout = timeout or self.DEFAULT_TIMEOUT
 
+        # Skip the HTTP round-trip entirely when the key is absent.  A missing
+        # key causes a 401/403 which would be logged as an error and counted
+        # against the investigation's coverage score unfairly.
+        if self.REQUIRES_API_KEY and not self.api_key:
+            response.error = f"{self.SOURCE_SLUG} not configured (missing API key)"
+            logger.info("Skipping %s — API key not set", self.SOURCE_SLUG)
+            if expected_fields:
+                for field in expected_fields:
+                    response.add(field, None, ResultStatus.ERROR)
+            return response
+
         try:
             # Build the request
             req = self._build_request(ioc_value, ioc_type)
@@ -139,6 +163,15 @@ class BaseAdapter(ABC):
                     int(retry_after) if retry_after else None,
                 )
 
+            # 404 on sources where it means "IOC not in database" (GreyNoise,
+            # Shodan, SecurityTrails…) should be treated as zero results, not
+            # as a service failure.
+            if http_response.status_code == 404 and self.NOT_FOUND_IS_VALID:
+                logger.info("[%s] IOC not found in source (HTTP 404)", self.SOURCE_SLUG)
+                response.success = True
+                response.response_time_ms = elapsed_ms
+                return response
+
             # Check for errors
             if http_response.status_code >= 400:
                 raise SourceUnavailableError(
@@ -153,41 +186,41 @@ class BaseAdapter(ABC):
             response.success = True
 
             logger.info(
-                f"[{self.SOURCE_SLUG}] Query for {ioc_type}:{ioc_value[:30]} "
-                f"→ {len(response.results)} fields in {elapsed_ms}ms"
+                "[%s] Query for %s:%s -> %d fields in %dms",
+                self.SOURCE_SLUG, ioc_type, ioc_value[:30], len(response.results), elapsed_ms,
             )
 
         except RateLimitExceededError:
             response.error = f"Rate limit exceeded for {self.SOURCE_SLUG}"
-            logger.warning(response.error)
+            logger.warning("Rate limit exceeded for %s", self.SOURCE_SLUG)
             if expected_fields:
                 for field in expected_fields:
                     response.add(field, None, ResultStatus.TIMEOUT)
 
         except SourceUnavailableError as e:
             response.error = str(e)
-            logger.error(response.error)
+            logger.error("Source unavailable — %s: %s", self.SOURCE_SLUG, e)
             if expected_fields:
                 for field in expected_fields:
                     response.add(field, None, ResultStatus.ERROR)
 
         except requests.Timeout:
             response.error = f"Timeout after {timeout}s for {self.SOURCE_SLUG}"
-            logger.warning(response.error)
+            logger.warning("Timeout after %ds for %s", timeout, self.SOURCE_SLUG)
             if expected_fields:
                 for field in expected_fields:
                     response.add(field, None, ResultStatus.TIMEOUT)
 
         except requests.ConnectionError:
             response.error = f"Connection error for {self.SOURCE_SLUG}"
-            logger.error(response.error)
+            logger.error("Connection error for %s", self.SOURCE_SLUG)
             if expected_fields:
                 for field in expected_fields:
                     response.add(field, None, ResultStatus.ERROR)
 
         except Exception as e:
             response.error = f"Unexpected error for {self.SOURCE_SLUG}: {str(e)}"
-            logger.exception(response.error)
+            logger.exception("Unexpected error for %s", self.SOURCE_SLUG)
             if expected_fields:
                 for field in expected_fields:
                     response.add(field, None, ResultStatus.ERROR)

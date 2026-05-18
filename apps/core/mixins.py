@@ -45,7 +45,28 @@ def user_can_access_investigation(user, investigation) -> bool:
     Check if a user has read access to an investigation.
 
     Org members share access; solo users can only see their own.
+
+    NOTE: investigation.analyst is a nullable FK.  We must guard against
+    analyst=None (e.g. the analyst account was deleted) to avoid an
+    AttributeError when accessing .organization_id on NoneType.
     """
-    if user.organization_id and investigation.analyst.organization_id == user.organization_id:
+    if investigation.analyst_id is None:
+        return False
+    if investigation.analyst_id == user.pk:
         return True
-    return investigation.analyst_id == user.pk
+    if user.organization_id:
+        # Avoid hitting the DB when analyst is already prefetched; fall back
+        # to a direct FK comparison on the investigation row.
+        analyst_org = (
+            investigation.analyst.organization_id
+            if hasattr(investigation, "_analyst_cache") or investigation.__dict__.get("analyst")
+            else None
+        )
+        if analyst_org is None:
+            # Perform a single targeted query rather than loading the full User object.
+            from apps.users.models import User
+            analyst_org = User.objects.filter(pk=investigation.analyst_id).values_list(
+                "organization_id", flat=True
+            ).first()
+        return analyst_org == user.organization_id
+    return False

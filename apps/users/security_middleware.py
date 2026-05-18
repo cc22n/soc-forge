@@ -10,7 +10,9 @@ Provides:
 import logging
 import re
 
+from django.contrib import messages
 from django.core.cache import caches
+from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +43,10 @@ class RateLimitMiddleware:
         ):
             if not self._allow_request(request.user.pk):
                 logger.warning(
-                    f"Rate limit exceeded for user {request.user.username} "
-                    f"on {request.path}"
+                    "Rate limit exceeded for user %s on %s",
+                    request.user.username,
+                    request.path,
                 )
-                from django.contrib import messages
-                from django.shortcuts import redirect
-
                 messages.error(
                     request,
                     f"Rate limit exceeded. Maximum {self.RATE_LIMIT} investigations "
@@ -118,6 +118,9 @@ class IOCSanitizationMiddleware:
     """
 
     # Patterns that should NEVER appear in IOC values
+    # Max length we are willing to inspect (mirrors Indicator.value max_length)
+    _MAX_IOC_LENGTH = 2048
+
     DANGEROUS_PATTERNS = [
         re.compile(r"<script", re.IGNORECASE),
         re.compile(r"javascript:", re.IGNORECASE),
@@ -133,18 +136,31 @@ class IOCSanitizationMiddleware:
     def __call__(self, request):
         if request.method == "POST" and "ioc_value" in request.POST:
             ioc_value = request.POST.get("ioc_value", "")
+
+            actor = (
+                request.user.username
+                if hasattr(request, "user") and request.user.is_authenticated
+                else "anon"
+            )
+
+            # Reject oversized input before running regex patterns
+            if len(ioc_value) > self._MAX_IOC_LENGTH:
+                logger.warning(
+                    "Blocked oversized IOC input (%d chars) from %s",
+                    len(ioc_value),
+                    actor,
+                )
+                messages.error(request, "Invalid input detected.")
+                return redirect("investigations:new")
+
             for pattern in self.DANGEROUS_PATTERNS:
                 if pattern.search(ioc_value):
                     logger.warning(
-                        f"Blocked suspicious IOC input from "
-                        f"{request.user.username if request.user.is_authenticated else 'anon'}: "
-                        f"{ioc_value[:100]}"
+                        "Blocked suspicious IOC input from %s: %s",
+                        actor,
+                        ioc_value[:100],
                     )
-                    from django.contrib import messages
-
                     messages.error(request, "Invalid input detected.")
-                    from django.shortcuts import redirect
-
                     return redirect("investigations:new")
 
         return self.get_response(request)

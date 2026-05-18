@@ -67,12 +67,10 @@ def validate_sha256(value: str) -> None:
 def validate_ip(value: str) -> None:
     """Validate IPv4 or IPv6 address format and reject private/reserved ranges."""
     try:
-        addr = IPv4Address(value)
-        ip_obj = ipaddress.IPv4Address(value)
+        ip_obj = IPv4Address(value)
     except ValueError:
         try:
-            addr = IPv6Address(value)
-            ip_obj = ipaddress.IPv6Address(value)
+            ip_obj = IPv6Address(value)
         except ValueError:
             raise ValidationError(
                 "Invalid IP address format.",
@@ -81,7 +79,8 @@ def validate_ip(value: str) -> None:
     for network in _PRIVATE_NETWORKS:
         if ip_obj in network:
             raise ValidationError(
-                f"IP {value} is in a private or reserved range and cannot be queried against external threat intelligence sources.",
+                f"IP {value} is in a private or reserved range and cannot be "
+                "queried against external threat intelligence sources.",
                 code="private_ip",
             )
 

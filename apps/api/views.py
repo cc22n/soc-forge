@@ -77,7 +77,10 @@ def investigation_list(request):
     List investigations visible to the authenticated user (own or org-shared).
     Supports ?limit=N (default 20, max 100).
     """
-    limit = min(int(request.query_params.get("limit", 20)), 100)
+    try:
+        limit = min(int(request.query_params.get("limit", 20)), 100)
+    except (ValueError, TypeError):
+        limit = 20
     qs = (
         Investigation.objects
         .filter(org_investigations_filter(request.user))
@@ -134,7 +137,10 @@ def community_list(request):
     GET /api/community/
     List community indicators. Supports ?q=<search> and ?limit=N (default 20).
     """
-    limit = min(int(request.query_params.get("limit", 20)), 100)
+    try:
+        limit = min(int(request.query_params.get("limit", 20)), 100)
+    except (ValueError, TypeError):
+        limit = 20
     query = request.query_params.get("q", "").strip()
     qs = (
         CommunityIndicator.objects

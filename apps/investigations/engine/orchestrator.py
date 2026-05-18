@@ -65,7 +65,7 @@ class InvestigationOrchestrator:
         try:
             validate_ioc(ioc_value, validation_type)
         except Exception as e:
-            logger.error(f"IOC validation failed: {e}")
+            logger.error("IOC validation failed: %s", e)
             raise
 
         # For storage, use the detected type (more specific)
@@ -111,12 +111,12 @@ class InvestigationOrchestrator:
             adapter = get_adapter(source.slug)
 
             if adapter is None:
-                logger.warning(f"No adapter found for source: {source.slug}")
+                logger.warning("No adapter found for source: %s", source.slug)
                 errors.append(f"No adapter for {source.name}")
                 continue
 
             if not adapter.supports(storage_ioc_type):
-                logger.info(f"Adapter {source.slug} doesn't support {storage_ioc_type}, skipping")
+                logger.info("Adapter %s doesn't support %s, skipping", source.slug, storage_ioc_type)
                 continue
 
             expected_fields_qs = sc.expected_fields.select_related("available_field")
@@ -124,9 +124,10 @@ class InvestigationOrchestrator:
 
             if not expected_field_names:
                 logger.warning(
-                    f"No expected fields for {source.name} in profile '{profile.name}'. "
-                    f"Profile ioc_type={profile_ioc_type}, storage ioc_type={storage_ioc_type}. "
-                    f"Querying ALL fields instead."
+                    "No expected fields for %s in profile '%s'. "
+                    "Profile ioc_type=%s, storage ioc_type=%s. "
+                    "Querying ALL fields instead.",
+                    source.name, profile.name, profile_ioc_type, storage_ioc_type,
                 )
                 expected_field_names_for_query = None
             else:
@@ -173,13 +174,16 @@ class InvestigationOrchestrator:
                         for r in cached
                     ]
                     found_count = sum(1 for r in cached if r.status == ResultStatus.FOUND)
-                    logger.info(f"  → {source.name}: cache hit ({len(cached)} results reused)")
+                    logger.info("  -> %s: cache hit (%d results reused)", source.name, len(cached))
                     return source.name, "", result_objects, found_count
 
             # Cache miss: call the API
             logger.info(
-                f"Querying {source.name} for {storage_ioc_type}:{ioc_value[:30]}... "
-                f"(expecting {len(expected_field_names) if expected_field_names else 'all'} fields)"
+                "Querying %s for %s:%s... (expecting %s fields)",
+                source.name,
+                storage_ioc_type,
+                ioc_value[:30],
+                len(expected_field_names) if expected_field_names else "all",
             )
             adapter_response = adapter.query(
                 ioc_value=ioc_value,
@@ -217,11 +221,11 @@ class InvestigationOrchestrator:
                         errors.append(f"{source_name}: {error}")
                     all_result_objects.extend(result_objects)
                     total_found += found_count
-                    logger.info(f"  → {source_name}: {len(result_objects)} results, {found_count} found")
+                    logger.info("  -> %s: %d results, %d found", source_name, len(result_objects), found_count)
                 except Exception as exc:
                     cfg = futures[future]
-                    errors.append(f"{cfg['source'].name}: unexpected error — {exc}")
-                    logger.exception(f"Unexpected error querying {cfg['source'].name}")
+                    errors.append(f"{cfg['source'].name}: unexpected error -- {exc}")
+                    logger.exception("Unexpected error querying %s", cfg["source"].name)
 
         # --- Phase 3: persist all results in one batch ---
         if all_result_objects:
@@ -250,9 +254,8 @@ class InvestigationOrchestrator:
         investigation.save()
 
         logger.info(
-            f"Investigation #{investigation.pk} completed: "
-            f"{investigation.status} — {total_found}/{total_expected} fields "
-            f"({coverage:.1f}% coverage)"
+            "Investigation #%d completed: %s -- %d/%d fields (%.1f%% coverage)",
+            investigation.pk, investigation.status, total_found, total_expected, coverage,
         )
 
         return investigation

@@ -1,5 +1,7 @@
 """AlienVault OTX API adapter — hashes, IPs, domains, URLs."""
 
+import urllib.parse
+
 from apps.core.enums import IOCType
 from ..base_adapter import BaseAdapter
 
@@ -20,7 +22,9 @@ class OTXAdapter(BaseAdapter):
         elif ioc_type == "domain":
             url = f"{base}/indicators/domain/{ioc_value}/general"
         elif ioc_type == "url":
-            url = f"{base}/indicators/url/{ioc_value}/general"
+            # OTX embeds the URL in the path — encode it to handle slashes,
+            # query strings, and special chars that would break routing.
+            url = f"{base}/indicators/url/{urllib.parse.quote(ioc_value, safe='')}/general"
         else:
             url = f"{base}/indicators/file/{ioc_value}/general"
 

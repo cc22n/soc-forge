@@ -13,6 +13,7 @@ from ..transforms import transform_ipinfo_asn, transform_ipinfo_loc_lat, transfo
 class SecurityTrailsAdapter(BaseAdapter):
     SOURCE_SLUG = "securitytrails"
     SUPPORTED_IOC_TYPES = ["domain", "ip"]
+    NOT_FOUND_IS_VALID = True  # 404 = domain/IP not in SecurityTrails DB
 
     def _build_request(self, ioc_value, ioc_type):
         headers = {"APIKEY": self.api_key, "Accept": "application/json"}
@@ -51,7 +52,11 @@ class SafeBrowsingAdapter(BaseAdapter):
         url_to_check = ioc_value if ioc_type == "url" else f"http://{ioc_value}/"
         return {
             "method": "POST",
-            "url": f"https://safebrowsing.googleapis.com/v4/threatMatches:find?key={self.api_key}",
+            "url": "https://safebrowsing.googleapis.com/v4/threatMatches:find",
+            # Pass key as a query param via `params` so requests handles URL
+            # encoding, but keep it out of the literal URL string to reduce
+            # accidental logging exposure.
+            "params": {"key": self.api_key},
             "json": {
                 "client": {"clientId": "socforge", "clientVersion": "1.0"},
                 "threatInfo": {
@@ -78,7 +83,10 @@ class SafeBrowsingAdapter(BaseAdapter):
 
 class HybridAnalysisAdapter(BaseAdapter):
     SOURCE_SLUG = "hybrid_analysis"
-    SUPPORTED_IOC_TYPES = ["hash", "url"]
+    # URL type removed: the search/hash endpoint is hash-only. Hybrid Analysis
+    # does have URL analysis but via a separate submission flow that requires
+    # waiting for sandbox results — not suitable for a synchronous adapter.
+    SUPPORTED_IOC_TYPES = ["hash"]
 
     def _build_request(self, ioc_value, ioc_type):
         return {
@@ -222,10 +230,16 @@ class IPQualityScoreAdapter(BaseAdapter):
     SUPPORTED_IOC_TYPES = ["ip", "url"]
 
     def _build_request(self, ioc_value, ioc_type):
+        # IPQualityScore puts the key in the path — we must follow their API
+        # contract but we explicitly document the exposure so operators know.
+        # There is no header-auth alternative for this provider.
         if ioc_type == "ip":
             url = f"https://ipqualityscore.com/api/json/ip/{self.api_key}/{ioc_value}"
         else:
-            url = f"https://ipqualityscore.com/api/json/url/{self.api_key}/{ioc_value}"
+            # URL-encode the ioc_value before embedding in the path to prevent
+            # path traversal (e.g. a value containing '/' or '..' sequences).
+            import urllib.parse
+            url = f"https://ipqualityscore.com/api/json/url/{self.api_key}/{urllib.parse.quote(ioc_value, safe='')}"
         return {"url": url}
 
     def _parse_response(self, raw, ioc_type, expected_fields):
@@ -254,27 +268,34 @@ class CensysAdapter(BaseAdapter):
     SOURCE_SLUG = "censys"
     SUPPORTED_IOC_TYPES = ["ip", "domain"]
 
-    def _get_api_key(self):
-        keys = getattr(self, "_settings_keys", None)
-        if keys is None:
-            from django.conf import settings
-            self._settings_keys = settings.THREAT_INTEL_KEYS
-        return self._settings_keys.get("censys_id", "")
+    def __init__(self):
+        # Read both Censys credentials at construction time so _build_request
+        # does not need to touch settings on every API call.
+        from django.conf import settings
+        keys = settings.THREAT_INTEL_KEYS
+        self.api_key = keys.get("censys_id", "")
+        self._api_secret = keys.get("censys_secret", "")
+        # Initialise the session (skips BaseAdapter.__init__ to avoid a second
+        # _get_api_key() call that would use the wrong key name).
+        import requests as _requests
+        self.session = _requests.Session()
 
     def _build_request(self, ioc_value, ioc_type):
         api_id = self.api_key
-        from django.conf import settings
-        api_secret = settings.THREAT_INTEL_KEYS.get("censys_secret", "")
+        api_secret = self._api_secret
         auth_str = base64.b64encode(f"{api_id}:{api_secret}".encode()).decode()
 
         if ioc_type == "ip":
             url = f"https://search.censys.io/api/v2/hosts/{ioc_value}"
+            params: dict = {}
         else:
-            url = f"https://search.censys.io/api/v2/hosts/search?q={ioc_value}"
+            url = "https://search.censys.io/api/v2/hosts/search"
+            params = {"q": ioc_value}
 
         return {
             "url": url,
             "headers": {"Authorization": f"Basic {auth_str}", "Accept": "application/json"},
+            "params": params,
         }
 
     def _parse_response(self, raw, ioc_type, expected_fields):

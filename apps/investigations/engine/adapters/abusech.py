@@ -7,6 +7,7 @@ from ..base_adapter import BaseAdapter
 class ThreatFoxAdapter(BaseAdapter):
     SOURCE_SLUG = "threatfox"
     SUPPORTED_IOC_TYPES = ["hash", "ip", "domain"]
+    REQUIRES_API_KEY = False  # abuse.ch public API, no key required
 
     def _build_request(self, ioc_value, ioc_type):
         general = IOCType.get_general_type(ioc_type)
@@ -44,6 +45,7 @@ class ThreatFoxAdapter(BaseAdapter):
 class URLhausAdapter(BaseAdapter):
     SOURCE_SLUG = "urlhaus"
     SUPPORTED_IOC_TYPES = ["url", "domain", "hash"]
+    REQUIRES_API_KEY = False  # abuse.ch public API, no key required
 
     def _build_request(self, ioc_value, ioc_type):
         general = IOCType.get_general_type(ioc_type)
@@ -113,6 +115,7 @@ class URLhausAdapter(BaseAdapter):
 class MalwareBazaarAdapter(BaseAdapter):
     SOURCE_SLUG = "malware_bazaar"
     SUPPORTED_IOC_TYPES = ["hash"]
+    REQUIRES_API_KEY = False  # abuse.ch public API, no key required
 
     def _build_request(self, ioc_value, ioc_type):
         if len(ioc_value) == 32:

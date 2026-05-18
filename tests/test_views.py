@@ -2,10 +2,14 @@
 Tests for Django views — authentication, page access, investigation submission.
 """
 
+import json
+from unittest.mock import patch
+
 import pytest
 from django.urls import reverse
 
-from apps.investigations.models import Investigation
+from apps.investigations.models import Investigation, Indicator
+from apps.investigations.llm import LLMNotConfiguredError
 from apps.profiles.models import InvestigationProfile
 
 
@@ -187,3 +191,113 @@ class TestModels:
 
     def test_profile_str(self, sample_profile):
         assert "Test IP Profile" in str(sample_profile)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures shared by LLM summary tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def sample_investigation(db, analyst_user, sample_profile):
+    """Minimal Investigation with a linked Indicator."""
+    indicator = Indicator.objects.create(
+        value="8.8.8.8",
+        ioc_type="ip",
+        created_by=analyst_user,
+    )
+    return Investigation.objects.create(
+        analyst=analyst_user,
+        indicator=indicator,
+        profile_used=sample_profile,
+        status="completed",
+        coverage_score=75.0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests for investigation_generate_summary
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+class TestLLMSummaryEndpoint:
+    URL = "/investigations/{pk}/summary/"
+
+    def url(self, pk):
+        return self.URL.format(pk=pk)
+
+    def test_requires_login(self, client, sample_investigation):
+        response = client.post(self.url(sample_investigation.pk))
+        assert response.status_code == 302
+        assert "/auth/login/" in response.url
+
+    def test_requires_post(self, auth_client, sample_investigation):
+        response = auth_client.get(self.url(sample_investigation.pk))
+        assert response.status_code == 405
+
+    def test_llm_not_configured_returns_503(self, auth_client, sample_investigation):
+        with patch("apps.investigations.views.call_llm", side_effect=LLMNotConfiguredError("no key")):
+            response = auth_client.post(self.url(sample_investigation.pk))
+        assert response.status_code == 503
+        data = json.loads(response.content)
+        assert "error" in data
+
+    def test_success_returns_summary_and_provider(self, auth_client, sample_investigation, settings):
+        settings.LLM_PROVIDER = "anthropic"
+        settings.ANTHROPIC_API_KEY = "test-key"
+        settings.LLM_MODEL = "claude-haiku-4-5-20251001"
+        payload = json.dumps({"summary": "Benign DNS.", "recommendation": "No action needed."})
+        with patch("apps.investigations.views.call_llm", return_value=payload):
+            response = auth_client.post(self.url(sample_investigation.pk))
+        assert response.status_code == 200
+        data = json.loads(response.content)
+        assert data["summary"] == "Benign DNS."
+        assert data["recommendation"] == "No action needed."
+        assert "provider" in data
+
+    def test_fenced_json_is_parsed(self, auth_client, sample_investigation, settings):
+        settings.LLM_PROVIDER = "anthropic"
+        settings.ANTHROPIC_API_KEY = "test-key"
+        settings.LLM_MODEL = "claude-haiku-4-5-20251001"
+        fenced = '```json\n{"summary": "Malicious.", "recommendation": "Block it."}\n```'
+        with patch("apps.investigations.views.call_llm", return_value=fenced):
+            response = auth_client.post(self.url(sample_investigation.pk))
+        assert response.status_code == 200
+        data = json.loads(response.content)
+        assert data["summary"] == "Malicious."
+        assert data["recommendation"] == "Block it."
+
+    def test_non_json_response_falls_back(self, auth_client, sample_investigation, settings):
+        settings.LLM_PROVIDER = "anthropic"
+        settings.ANTHROPIC_API_KEY = "test-key"
+        settings.LLM_MODEL = "claude-haiku-4-5-20251001"
+        with patch("apps.investigations.views.call_llm", return_value="This is plain text."):
+            response = auth_client.post(self.url(sample_investigation.pk))
+        assert response.status_code == 200
+        data = json.loads(response.content)
+        assert data["summary"] == "This is plain text."
+        assert data["recommendation"] == ""
+
+    def test_llm_exception_returns_502(self, auth_client, sample_investigation, settings):
+        settings.LLM_PROVIDER = "anthropic"
+        settings.ANTHROPIC_API_KEY = "test-key"
+        settings.LLM_MODEL = "claude-haiku-4-5-20251001"
+        with patch("apps.investigations.views.call_llm", side_effect=RuntimeError("timeout")):
+            response = auth_client.post(self.url(sample_investigation.pk))
+        assert response.status_code == 502
+        data = json.loads(response.content)
+        assert "error" in data
+        assert "timeout" not in data["error"]  # internal detail must not leak
+
+    def test_access_denied_for_other_user(self, db, sample_investigation):
+        from apps.users.models import User
+        other = User.objects.create_user(
+            username="other_analyst",
+            password="OtherPass1234!",
+            email="other@socforge.test",
+        )
+        from django.test import Client
+        c = Client()
+        c.force_login(other)
+        with patch("apps.investigations.views.call_llm", return_value='{"summary":"x","recommendation":"y"}'):
+            response = c.post(self.url(sample_investigation.pk))
+        assert response.status_code == 403

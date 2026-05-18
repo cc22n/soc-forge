@@ -6,6 +6,7 @@ from ..base_adapter import BaseAdapter
 class GreyNoiseAdapter(BaseAdapter):
     SOURCE_SLUG = "greynoise"
     SUPPORTED_IOC_TYPES = ["ip"]
+    NOT_FOUND_IS_VALID = True  # 404 = IP not in GreyNoise DB, not a service error
 
     def _build_request(self, ioc_value, ioc_type):
         return {

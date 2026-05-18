@@ -83,7 +83,7 @@ def register(request):
     if request.method == "POST":
         ip = _get_client_ip(request)
         if not _registration_allowed(ip):
-            logger.warning(f"Registration rate limit exceeded from IP {ip}")
+            logger.warning("Registration rate limit exceeded from IP %s", ip)
             messages.error(
                 request,
                 "Too many registration attempts. Please wait 10 minutes and try again.",
@@ -93,7 +93,7 @@ def register(request):
         form = RegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            logger.info(f"New user registered: {user.username} from {ip}")
+            logger.info("New user registered: %s from %s", user.username, ip)
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
             messages.success(request, f"Welcome to SOC Forge, {user.username}!")
             return redirect("users:dashboard")

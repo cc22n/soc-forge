@@ -12,6 +12,7 @@ plan-de-mejora.md
 prompt de mejora.md
 propuestas-mejora.md
 # Virtual environment
+SECURITY.md
 venv/
 .venv/
 env/

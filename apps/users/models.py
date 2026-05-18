@@ -11,6 +11,7 @@ import json
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils.text import slugify
 
 from apps.core.enums import AuditAction, UserRole
@@ -68,6 +69,11 @@ class User(AbstractUser):
         ordering = ["-date_joined"]
         verbose_name = "User"
         verbose_name_plural = "Users"
+        constraints = [
+            # Case-insensitive uniqueness at the DB level — closes the TOCTOU
+            # window between RegistrationForm.clean_username() and User.save().
+            models.UniqueConstraint(Lower("username"), name="users_username_ci_unique"),
+        ]
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
@@ -204,10 +210,23 @@ class AuditLog(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.pk:  # only on creation (AuditLog is append-only)
-            last = AuditLog.objects.order_by("pk").last()
-            prev = last.entry_hash if last and last.entry_hash else "0" * 64
-            self.previous_hash = prev
-            self.entry_hash = self._compute_hash(prev)
+            # select_for_update() serialises concurrent inserts so the
+            # chain ordering is deterministic under load.  We wrap both
+            # the read and the write in a single SAVEPOINT via atomic() so
+            # the outer transaction is not affected if one is already open.
+            from django.db import transaction
+            with transaction.atomic():
+                last = (
+                    AuditLog.objects
+                    .select_for_update()
+                    .order_by("pk")
+                    .last()
+                )
+                prev = last.entry_hash if last and last.entry_hash else "0" * 64
+                self.previous_hash = prev
+                self.entry_hash = self._compute_hash(prev)
+                super().save(*args, **kwargs)
+            return
         super().save(*args, **kwargs)
 
     def __str__(self):

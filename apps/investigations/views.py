@@ -10,7 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.core.enums import IOCType
+from apps.core.enums import IOCType, ResultStatus
 from apps.core.mixins import org_investigations_filter, user_can_access_investigation
 from apps.core.validators import detect_ioc_type
 from apps.profiles.models import InvestigationProfile
@@ -92,7 +92,7 @@ def investigation_new(request):
             return redirect("investigations:detail", pk=investigation.pk)
 
         except Exception as e:
-            logger.exception(f"Investigation failed: {e}")
+            logger.exception("Investigation failed for IOC %s", ioc_value[:50])
             messages.error(request, f"Investigation failed: {str(e)}")
             return render(request, "investigations/new.html", {
                 "profiles": profiles,
@@ -115,7 +115,7 @@ def investigation_detail(request, pk):
         messages.error(request, "You don't have access to this investigation.")
         return redirect("investigations:list")
 
-    results = (
+    results = list(
         InvestigationResult.objects
         .filter(investigation=investigation)
         .select_related("source")
@@ -137,9 +137,9 @@ def investigation_detail(request, pk):
             }
         results_by_source[source_name]["results"].append(r)
         results_by_source[source_name]["total"] += 1
-        if r.status == "found":
+        if r.status == ResultStatus.FOUND:
             results_by_source[source_name]["found"] += 1
-        elif r.status in ("error", "timeout"):
+        elif r.status in (ResultStatus.ERROR, ResultStatus.TIMEOUT):
             results_by_source[source_name]["errors"] += 1
 
     # Derive adapter_status for each source panel
@@ -161,7 +161,7 @@ def investigation_detail(request, pk):
     return render(request, "investigations/detail.html", {
         "investigation": investigation,
         "results_by_source": results_by_source,
-        "total_results": results.count(),
+        "total_results": len(results),
         "duration": duration,
     })
 
@@ -195,6 +195,10 @@ def investigation_export_stix(request, pk):
     ) if investigation.completed_at else ""
 
     # Build STIX Indicator object
+    # Escape single quotes in the IOC value to prevent STIX pattern injection.
+    # STIX 2.1 uses '' (doubled single quote) as the escape sequence inside
+    # a single-quoted string literal.
+    escaped_value = indicator.value.replace("'", "''")
     pattern_attr = _STIX_PATTERN_MAP.get(indicator.ioc_type, "ipv4-addr:value")
     stix_indicator = {
         "type": "indicator",
@@ -203,7 +207,7 @@ def investigation_export_stix(request, pk):
         "created": now_iso,
         "modified": now_iso,
         "name": indicator.value,
-        "pattern": f"[{pattern_attr} = '{indicator.value}']",
+        "pattern": f"[{pattern_attr} = '{escaped_value}']",
         "pattern_type": "stix",
         "valid_from": now_iso,
         "labels": ["malicious-activity"],
@@ -308,6 +312,16 @@ def investigation_generate_summary(request, pk):
     if not sources_text:
         sources_text = "\n(No data found by any source)"
 
+    # Truncate user-controlled values before embedding in the prompt to bound
+    # context size and reduce prompt-injection surface. The IOC value is already
+    # validated by the orchestrator, but an attacker who inserts a crafted value
+    # via the community KB could still try to inject instructions through this
+    # field. Limiting length and keeping it inside a clearly-delimited block
+    # provides a reasonable mitigation for a portfolio-grade threat model.
+    safe_ioc_value = str(investigation.indicator.value)[:200]
+    safe_ioc_type = str(investigation.indicator.get_ioc_type_display())[:50]
+    safe_profile = str(investigation.profile_used.name if investigation.profile_used else "default")[:100]
+
     prompt = f"""You are a SOC analyst assistant. Analyze the following threat intelligence results and provide:
 1. A concise summary (2-4 sentences) of what the data reveals about this IOC.
 2. A clear action recommendation (1-2 sentences) for a SOC analyst.
@@ -315,10 +329,10 @@ def investigation_generate_summary(request, pk):
 Be direct and actionable. Use plain language without markdown headers.
 
 ## IOC
-- Value: {investigation.indicator.value}
-- Type: {investigation.indicator.get_ioc_type_display()}
+- Value: {safe_ioc_value}
+- Type: {safe_ioc_type}
 - Coverage score: {investigation.coverage_score:.0f}% ({investigation.get_status_display()})
-- Profile: {investigation.profile_used.name if investigation.profile_used else "default"}
+- Profile: {safe_profile}
 
 ## Threat Intelligence Results
 {sources_text}
@@ -333,13 +347,17 @@ Respond in valid JSON only, with keys "summary" and "recommendation"."""
 
         raw = call_llm(prompt)
 
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+        # Strip markdown code fences if present.
+        # Some providers wrap JSON in ```json ... ``` even when told not to.
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            # Remove the opening fence line (e.g. "```json")
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            # Remove the closing fence
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3].strip()
 
-        data = json.loads(raw)
+        data = json.loads(cleaned)
         return JsonResponse({
             "summary": str(data.get("summary", "")),
             "recommendation": str(data.get("recommendation", "")),
@@ -349,7 +367,9 @@ Respond in valid JSON only, with keys "summary" and "recommendation"."""
     except LLMNotConfiguredError as exc:
         return JsonResponse({"error": str(exc)}, status=503)
     except json.JSONDecodeError:
+        # LLM returned non-JSON — surface the raw text as the summary so the
+        # analyst still gets useful output rather than a silent failure.
         return JsonResponse({"summary": raw, "recommendation": "", "provider": ""})
-    except Exception as exc:
-        logger.exception(f"LLM summary failed for investigation #{pk}: {exc}")
-        return JsonResponse({"error": f"LLM request failed: {exc}"}, status=502)
+    except Exception:
+        logger.exception("LLM summary failed for investigation #%s", pk)
+        return JsonResponse({"error": "LLM request failed. Check server logs for details."}, status=502)

@@ -7,6 +7,7 @@ from ..transforms import transform_shodan_services
 class ShodanAdapter(BaseAdapter):
     SOURCE_SLUG = "shodan"
     SUPPORTED_IOC_TYPES = ["ip"]
+    NOT_FOUND_IS_VALID = True  # 404 = IP not scanned by Shodan, not a service error
 
     def _build_request(self, ioc_value, ioc_type):
         return {
