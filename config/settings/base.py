@@ -280,6 +280,15 @@ CACHES = {
     ),
 }
 
+# Local best-effort throttle for threat-intel sources based on
+# Source.rate_limit_per_minute (see engine/orchestrator.py).
+SOURCE_RATE_LIMIT_ENABLED = env.bool("SOURCE_RATE_LIMIT_ENABLED", default=True)
+
+# Run web-triggered investigations through Celery instead of blocking the
+# request. Requires a running worker (celery -A config worker). When the
+# broker is unreachable, dispatch falls back to synchronous execution.
+INVESTIGATIONS_ASYNC = env.bool("INVESTIGATIONS_ASYNC", default=False)
+
 # ============================================
 # Logging
 # ============================================

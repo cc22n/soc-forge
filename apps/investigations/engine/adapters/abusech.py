@@ -1,13 +1,28 @@
-"""abuse.ch family adapters: ThreatFox, URLhaus, Malware Bazaar."""
+"""abuse.ch family adapters: ThreatFox, URLhaus, Malware Bazaar.
+
+All three platforms share a single abuse.ch account credential
+(THREAT_INTEL_KEYS["abusech"], from ABUSECH_AUTH_KEY). Authentication became
+mandatory for abuse.ch APIs in 2025 — requests without the Auth-Key header
+are rejected.
+"""
 
 from apps.core.enums import IOCType
 from ..base_adapter import BaseAdapter
 
 
-class ThreatFoxAdapter(BaseAdapter):
+class AbuseChAdapter(BaseAdapter):
+    """Shared base: one Auth-Key credential for the whole abuse.ch family."""
+
+    API_KEY_SLUG = "abusech"
+    REQUIRES_API_KEY = True  # mandatory since 2025 — skip cleanly if not set
+
+    def _auth_headers(self) -> dict:
+        return {"Auth-Key": self.api_key} if self.api_key else {}
+
+
+class ThreatFoxAdapter(AbuseChAdapter):
     SOURCE_SLUG = "threatfox"
     SUPPORTED_IOC_TYPES = ["hash", "ip", "domain"]
-    REQUIRES_API_KEY = False  # abuse.ch public API, no key required
 
     def _build_request(self, ioc_value, ioc_type):
         general = IOCType.get_general_type(ioc_type)
@@ -19,6 +34,7 @@ class ThreatFoxAdapter(BaseAdapter):
         return {
             "method": "POST",
             "url": "https://threatfox-api.abuse.ch/api/v1/",
+            "headers": self._auth_headers(),
             "json": payload,
         }
 
@@ -42,10 +58,9 @@ class ThreatFoxAdapter(BaseAdapter):
         return results
 
 
-class URLhausAdapter(BaseAdapter):
+class URLhausAdapter(AbuseChAdapter):
     SOURCE_SLUG = "urlhaus"
     SUPPORTED_IOC_TYPES = ["url", "domain", "hash"]
-    REQUIRES_API_KEY = False  # abuse.ch public API, no key required
 
     def _build_request(self, ioc_value, ioc_type):
         general = IOCType.get_general_type(ioc_type)
@@ -68,7 +83,7 @@ class URLhausAdapter(BaseAdapter):
             url = "https://urlhaus-api.abuse.ch/v1/url/"
             data = {"url": ioc_value}
 
-        return {"method": "POST", "url": url, "data": data}
+        return {"method": "POST", "url": url, "headers": self._auth_headers(), "data": data}
 
     def _parse_response(self, raw, ioc_type, expected_fields):
         results = []
@@ -112,22 +127,16 @@ class URLhausAdapter(BaseAdapter):
         return results
 
 
-class MalwareBazaarAdapter(BaseAdapter):
+class MalwareBazaarAdapter(AbuseChAdapter):
     SOURCE_SLUG = "malware_bazaar"
     SUPPORTED_IOC_TYPES = ["hash"]
-    REQUIRES_API_KEY = False  # abuse.ch public API, no key required
 
     def _build_request(self, ioc_value, ioc_type):
-        if len(ioc_value) == 32:
-            query_type = "get_info"
-            data = {"query": query_type, "hash": ioc_value}
-        else:
-            data = {"query": "get_info", "hash": ioc_value}
-
         return {
             "method": "POST",
             "url": "https://mb-api.abuse.ch/api/v1/",
-            "data": data,
+            "headers": self._auth_headers(),
+            "data": {"query": "get_info", "hash": ioc_value},
         }
 
     def _parse_response(self, raw, ioc_type, expected_fields):

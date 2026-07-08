@@ -219,3 +219,103 @@ class TestBaseAdapterErrorHandling:
             assert response.success
             assert response.response_time_ms >= 0
             assert len(response.results) > 0
+
+
+class TestBaseAdapterReliability:
+    """New reliability behaviors: 429 retry, 404-as-no-data, missing-key skip."""
+
+    @patch("apps.investigations.engine.base_adapter.BaseAdapter._get_api_key", return_value="test-key")
+    def test_429_with_short_retry_after_retries_once(self, mock_key):
+        adapter = AbuseIPDBAdapter()
+        rate_limited = _mock_response(429)
+        rate_limited.headers = {"Retry-After": "1"}
+        ok = _mock_response(200, {"data": {"abuseConfidenceScore": 10, "countryCode": "US"}})
+
+        with patch.object(adapter.session, "request", side_effect=[rate_limited, ok]) as mock_req, \
+             patch("apps.investigations.engine.base_adapter.time.sleep") as mock_sleep:
+            response = adapter.query("8.8.8.8", "ip", expected_fields=["abuse_confidence"])
+
+        assert response.success
+        assert mock_req.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("apps.investigations.engine.base_adapter.BaseAdapter._get_api_key", return_value="test-key")
+    def test_429_with_long_retry_after_fails_fast(self, mock_key):
+        adapter = AbuseIPDBAdapter()
+        rate_limited = _mock_response(429)
+        rate_limited.headers = {"Retry-After": "300"}
+
+        with patch.object(adapter.session, "request", return_value=rate_limited) as mock_req:
+            response = adapter.query("8.8.8.8", "ip", expected_fields=["abuse_confidence"])
+
+        assert not response.success
+        assert "Rate limit" in response.error
+        assert mock_req.call_count == 1
+
+    @patch("apps.investigations.engine.base_adapter.BaseAdapter._get_api_key", return_value="test-key")
+    def test_404_not_found_is_valid_reports_fields_as_not_found(self, mock_key):
+        adapter = GreyNoiseAdapter()  # NOT_FOUND_IS_VALID = True
+        with patch.object(adapter.session, "request", return_value=_mock_response(404)):
+            response = adapter.query("10.1.2.3", "ip", expected_fields=["classification", "is_noise"])
+
+        assert response.success
+        assert not response.error
+        assert {r.field_name for r in response.results} == {"classification", "is_noise"}
+        assert all(r.status == ResultStatus.NOT_FOUND for r in response.results)
+
+    @patch("apps.investigations.engine.base_adapter.BaseAdapter._get_api_key", return_value="")
+    def test_missing_api_key_skips_without_error_rows(self, mock_key):
+        adapter = AbuseIPDBAdapter()  # REQUIRES_API_KEY = True
+        with patch.object(adapter.session, "request") as mock_req:
+            response = adapter.query("8.8.8.8", "ip", expected_fields=["abuse_confidence"])
+
+        mock_req.assert_not_called()
+        assert not response.success
+        assert "not configured" in response.error
+        assert response.results == []
+
+    @patch("apps.investigations.engine.base_adapter.BaseAdapter._get_api_key", return_value="test-key")
+    def test_session_mounts_retry_adapter(self, mock_key):
+        adapter = AbuseIPDBAdapter()
+        https_adapter = adapter.session.get_adapter("https://example.com")
+        retries = https_adapter.max_retries
+        assert retries.total == 2
+        assert 503 in retries.status_forcelist
+        assert retries.raise_on_status is False
+
+
+class TestAbuseChAuthKey:
+    """abuse.ch made API authentication mandatory — the shared ABUSECH_AUTH_KEY
+    must reach all three family adapters as an Auth-Key header."""
+
+    def test_reads_shared_abusech_key(self, settings):
+        settings.THREAT_INTEL_KEYS = {"abusech": "shared-key-123"}
+        from apps.investigations.engine.adapters.abusech import (
+            MalwareBazaarAdapter, ThreatFoxAdapter, URLhausAdapter,
+        )
+        for cls in (ThreatFoxAdapter, URLhausAdapter, MalwareBazaarAdapter):
+            adapter = cls()
+            assert adapter.api_key == "shared-key-123", cls.__name__
+
+    def test_auth_key_header_sent(self, settings):
+        settings.THREAT_INTEL_KEYS = {"abusech": "shared-key-123"}
+        from apps.investigations.engine.adapters.abusech import (
+            MalwareBazaarAdapter, ThreatFoxAdapter, URLhausAdapter,
+        )
+        requests_built = [
+            ThreatFoxAdapter()._build_request("8.8.8.8", "ip"),
+            URLhausAdapter()._build_request("https://evil.com/x", "url"),
+            MalwareBazaarAdapter()._build_request("a" * 64, "hash_sha256"),
+        ]
+        for req in requests_built:
+            assert req["headers"]["Auth-Key"] == "shared-key-123"
+
+    def test_skipped_cleanly_without_key(self, settings):
+        settings.THREAT_INTEL_KEYS = {}
+        from apps.investigations.engine.adapters.abusech import ThreatFoxAdapter
+        adapter = ThreatFoxAdapter()
+        assert adapter.REQUIRES_API_KEY is True
+        with patch.object(adapter.session, "request") as mock_req:
+            response = adapter.query("8.8.8.8", "ip", expected_fields=["threat_type"])
+        mock_req.assert_not_called()
+        assert "not configured" in response.error

@@ -92,10 +92,10 @@ CENSYS = {
 MALWARE_BAZAAR = {
     "name": "Malware Bazaar", "slug": "malware_bazaar",
     "base_url": "https://mb-api.abuse.ch/api/v1/",
-    "auth_type": "none", "env_var_name": "",
+    "auth_type": "header", "env_var_name": "ABUSECH_AUTH_KEY",
     "supported_ioc_types": ["hash"],
     "rate_limit_per_minute": 10, "default_ttl_seconds": 2592000, "priority": 16,
-    "description": "Malware sample sharing and repository. Free, no API key (abuse.ch).",
+    "description": "Malware sample sharing and repository (abuse.ch). Free; requires abuse.ch Auth-Key.",
     "fields": [
         _f("hash_sha256", "malware_family", "data[].signature", "required"),
         _f("hash_sha256", "file_type", "data[].file_type", "core"),

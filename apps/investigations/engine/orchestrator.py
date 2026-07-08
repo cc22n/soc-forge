@@ -14,10 +14,14 @@ Executes a full investigation:
 """
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import timedelta
 
-from django.db import transaction
+from django.conf import settings
+from django.core.cache import caches
+from django.db import connections, transaction
 from django.utils import timezone
 
 from apps.core.enums import IOCType, InvestigationStatus, ResultStatus
@@ -29,13 +33,53 @@ from .registry import get_adapter
 
 logger = logging.getLogger(__name__)
 
+# Wall-clock budget for the parallel query phase. When exceeded, results from
+# sources that already finished are kept and the stragglers are reported as
+# errors — the investigation completes as PARTIAL instead of being lost.
+GLOBAL_TIMEOUT_SECONDS = 90
+
+# Preventive throttle: if respecting a source's rate_limit_per_minute would
+# require waiting longer than this, skip the source for this investigation.
+MAX_RATE_LIMIT_WAIT_SECONDS = 45
+
+
+def _wait_for_rate_limit(source) -> str:
+    """
+    Best-effort local throttle based on Source.rate_limit_per_minute.
+
+    Sleeps until the source's minimum interval has passed since our last query
+    to it (tracked in the rate_limit cache). Returns "" to proceed, or a skip
+    reason when the required wait exceeds MAX_RATE_LIMIT_WAIT_SECONDS.
+
+    Disable with SOURCE_RATE_LIMIT_ENABLED = False (used by the test suite).
+    """
+    if not getattr(settings, "SOURCE_RATE_LIMIT_ENABLED", True):
+        return ""
+    rpm = source.rate_limit_per_minute
+    if not rpm:
+        return ""
+    interval = 60.0 / rpm
+    cache = caches["rate_limit"]
+    key = f"source-last-query:{source.slug}"
+    last = cache.get(key)
+    if last is not None:
+        wait = interval - (time.time() - last)
+        if wait > MAX_RATE_LIMIT_WAIT_SECONDS:
+            return f"rate limit ({rpm}/min): next query allowed in {int(wait)}s"
+        if wait > 0:
+            logger.info("Throttling %s for %.1fs (rate limit %d/min)", source.slug, wait, rpm)
+            time.sleep(wait)
+    cache.set(key, time.time(), timeout=max(int(interval) * 2, 120))
+    return ""
+
 
 class InvestigationOrchestrator:
     """
     Executes an investigation based on a profile and IOC.
     """
 
-    def run(self, user, ioc_value: str, profile: InvestigationProfile) -> Investigation:
+    def run(self, user, ioc_value: str, profile: InvestigationProfile,
+            investigation: Investigation | None = None) -> Investigation:
         """
         Execute a full investigation.
 
@@ -43,6 +87,8 @@ class InvestigationOrchestrator:
             user: The analyst executing the investigation
             ioc_value: The IOC to investigate
             profile: The investigation profile to use
+            investigation: Optional pre-created PENDING placeholder (async
+                dispatch flow); reused instead of creating a new record.
 
         Returns:
             The completed Investigation object
@@ -73,23 +119,33 @@ class InvestigationOrchestrator:
         storage_ioc_type = detected_type if detected_type else profile_ioc_type
 
         with transaction.atomic():
-            # Get or create indicator with the specific detected type
-            indicator, created = Indicator.objects.get_or_create(
-                value=ioc_value,
-                ioc_type=storage_ioc_type,
-                defaults={"created_by": user},
-            )
-            indicator.times_investigated += 1
-            indicator.save(update_fields=["times_investigated", "updated_at"])
+            if investigation is not None:
+                # Async flow: reuse the PENDING placeholder created at dispatch.
+                indicator = investigation.indicator
+                indicator.times_investigated += 1
+                indicator.save(update_fields=["times_investigated", "updated_at"])
+                investigation.status = InvestigationStatus.RUNNING
+                if investigation.started_at is None:
+                    investigation.started_at = timezone.now()
+                investigation.save(update_fields=["status", "started_at"])
+            else:
+                # Get or create indicator with the specific detected type
+                indicator, created = Indicator.objects.get_or_create(
+                    value=ioc_value,
+                    ioc_type=storage_ioc_type,
+                    defaults={"created_by": user},
+                )
+                indicator.times_investigated += 1
+                indicator.save(update_fields=["times_investigated", "updated_at"])
 
-            # Create investigation record
-            investigation = Investigation.objects.create(
-                analyst=user,
-                indicator=indicator,
-                profile_used=profile,
-                status=InvestigationStatus.RUNNING,
-                started_at=timezone.now(),
-            )
+                # Create investigation record
+                investigation = Investigation.objects.create(
+                    analyst=user,
+                    indicator=indicator,
+                    profile_used=profile,
+                    status=InvestigationStatus.RUNNING,
+                    started_at=timezone.now(),
+                )
 
         # Get source configs in priority order
         source_configs = (
@@ -119,6 +175,13 @@ class InvestigationOrchestrator:
                 logger.info("Adapter %s doesn't support %s, skipping", source.slug, storage_ioc_type)
                 continue
 
+            # Unconfigured source: skip it here so its expected fields don't
+            # count against coverage and it doesn't degrade the investigation
+            # to PARTIAL. It was never consulted, it didn't fail.
+            if adapter.REQUIRES_API_KEY and not adapter.api_key:
+                logger.info("Skipping %s — API key not configured", source.slug)
+                continue
+
             expected_fields_qs = sc.expected_fields.select_related("available_field")
             expected_field_names = [ef.available_field.normalized_name for ef in expected_fields_qs]
 
@@ -144,6 +207,16 @@ class InvestigationOrchestrator:
 
         # --- Phase 2: execute all API queries in parallel (read-only DB + HTTP) ---
         def _query_one(cfg):
+            try:
+                return _query_one_inner(cfg)
+            finally:
+                # Each worker thread opens its own thread-local DB connection
+                # for the cache-TTL check; close it so it doesn't linger after
+                # the pool shuts down.
+                for conn in connections.all():
+                    conn.close()
+
+        def _query_one_inner(cfg):
             source = cfg["source"]
             adapter = cfg["adapter"]
             expected_field_names = cfg["expected_field_names"]
@@ -177,7 +250,24 @@ class InvestigationOrchestrator:
                     logger.info("  -> %s: cache hit (%d results reused)", source.name, len(cached))
                     return source.name, "", result_objects, found_count
 
-            # Cache miss: call the API
+            # Cache miss: respect the source's rate limit before hitting it.
+            throttle_msg = _wait_for_rate_limit(source)
+            if throttle_msg:
+                result_objects = [
+                    InvestigationResult(
+                        investigation=investigation,
+                        source=source,
+                        field_name=field,
+                        value=None,
+                        status=ResultStatus.TIMEOUT,
+                        was_expected=True,
+                        response_time_ms=0,
+                    )
+                    for field in (expected_field_names or [])
+                ]
+                logger.warning("Skipping %s — %s", source.name, throttle_msg)
+                return source.name, throttle_msg, result_objects, 0
+
             logger.info(
                 "Querying %s for %s:%s... (expecting %s fields)",
                 source.name,
@@ -211,21 +301,51 @@ class InvestigationOrchestrator:
             return source.name, adapter_response.error, result_objects, len(found_fields)
 
         all_result_objects = []
+        total_found_box = [0]  # mutable so _harvest can update it
+
+        def _harvest(future, cfg):
+            try:
+                source_name, error, result_objects, found_count = future.result()
+                if error:
+                    errors.append(f"{source_name}: {error}")
+                all_result_objects.extend(result_objects)
+                total_found_box[0] += found_count
+                logger.info("  -> %s: %d results, %d found", source_name, len(result_objects), found_count)
+            except Exception as exc:
+                errors.append(f"{cfg['source'].name}: unexpected error -- {exc}")
+                logger.exception("Unexpected error querying %s", cfg["source"].name)
+
         max_workers = min(8, len(configs_to_query)) if configs_to_query else 1
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(_query_one, cfg): cfg for cfg in configs_to_query}
-            for future in as_completed(futures, timeout=90):
-                try:
-                    source_name, error, result_objects, found_count = future.result()
-                    if error:
-                        errors.append(f"{source_name}: {error}")
-                    all_result_objects.extend(result_objects)
-                    total_found += found_count
-                    logger.info("  -> %s: %d results, %d found", source_name, len(result_objects), found_count)
-                except Exception as exc:
-                    cfg = futures[future]
-                    errors.append(f"{cfg['source'].name}: unexpected error -- {exc}")
-                    logger.exception("Unexpected error querying %s", cfg["source"].name)
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        futures = {executor.submit(_query_one, cfg): cfg for cfg in configs_to_query}
+        pending = set(futures)
+        try:
+            for future in as_completed(futures, timeout=GLOBAL_TIMEOUT_SECONDS):
+                pending.discard(future)
+                _harvest(future, futures[future])
+        except FuturesTimeoutError:
+            # Budget exhausted: keep everything that finished, report the
+            # stragglers as errors, and let the investigation complete as
+            # PARTIAL instead of losing all collected results.
+            for future in pending:
+                cfg = futures[future]
+                if future.done():
+                    _harvest(future, cfg)
+                else:
+                    errors.append(
+                        f"{cfg['source'].name}: no response within the "
+                        f"{GLOBAL_TIMEOUT_SECONDS}s investigation budget"
+                    )
+                    logger.warning(
+                        "Global timeout (%ds) — dropping %s",
+                        GLOBAL_TIMEOUT_SECONDS, cfg["source"].name,
+                    )
+        finally:
+            # Don't block on stragglers; their threads finish in the
+            # background and their results are discarded.
+            executor.shutdown(wait=False, cancel_futures=True)
+
+        total_found += total_found_box[0]
 
         # --- Phase 3: persist all results in one batch ---
         if all_result_objects:

@@ -17,6 +17,8 @@ import time
 from abc import ABC, abstractmethod
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from django.conf import settings
 
 from apps.core.enums import ResultStatus
@@ -87,15 +89,37 @@ class BaseAdapter(ABC):
     DEFAULT_TIMEOUT: int = 30
     REQUIRES_API_KEY: bool = True
     NOT_FOUND_IS_VALID: bool = False
+    # THREAT_INTEL_KEYS entry to read the key from; defaults to SOURCE_SLUG.
+    # Lets several adapters share one credential (abuse.ch family).
+    API_KEY_SLUG: str = ""
+    # On HTTP 429, retry once if the server's Retry-After is at most this many
+    # seconds; longer waits fail fast so they don't eat the investigation budget.
+    MAX_RETRY_AFTER_WAIT: int = 15
+
+    # Transparent retries for transient failures: connection errors and 5xx.
+    # raise_on_status=False returns the last response so the normal >=400
+    # handling below still applies; 429 is excluded because it has its own
+    # Retry-After-aware handling in query().
+    _RETRY_STRATEGY = Retry(
+        total=2,
+        backoff_factor=0.5,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=("GET", "POST"),
+        raise_on_status=False,
+        respect_retry_after_header=False,
+    )
 
     def __init__(self):
         self.api_key = self._get_api_key()
         self.session = requests.Session()
+        http_adapter = HTTPAdapter(max_retries=self._RETRY_STRATEGY)
+        self.session.mount("https://", http_adapter)
+        self.session.mount("http://", http_adapter)
 
     def _get_api_key(self) -> str:
         """Retrieve API key from Django settings."""
         keys = getattr(settings, "THREAT_INTEL_KEYS", {})
-        return keys.get(self.SOURCE_SLUG, "")
+        return keys.get(self.API_KEY_SLUG or self.SOURCE_SLUG, "")
 
     def supports(self, ioc_type: str) -> bool:
         """Check if this adapter can handle the given IOC type."""
@@ -122,13 +146,11 @@ class BaseAdapter(ABC):
 
         # Skip the HTTP round-trip entirely when the key is absent.  A missing
         # key causes a 401/403 which would be logged as an error and counted
-        # against the investigation's coverage score unfairly.
+        # against the investigation's coverage score unfairly.  No field rows
+        # are recorded: an unconfigured source is "not consulted", not failed.
         if self.REQUIRES_API_KEY and not self.api_key:
             response.error = f"{self.SOURCE_SLUG} not configured (missing API key)"
             logger.info("Skipping %s — API key not set", self.SOURCE_SLUG)
-            if expected_fields:
-                for field in expected_fields:
-                    response.add(field, None, ResultStatus.ERROR)
             return response
 
         try:
@@ -155,13 +177,24 @@ class BaseAdapter(ABC):
             elapsed_ms = int((time.monotonic() - start) * 1000)
             response.response_time_ms = elapsed_ms
 
-            # Check for rate limiting
+            # Check for rate limiting — honor short Retry-After hints with a
+            # single retry; anything longer fails fast.
             if http_response.status_code == 429:
-                retry_after = http_response.headers.get("Retry-After")
-                raise RateLimitExceededError(
-                    self.SOURCE_SLUG,
-                    int(retry_after) if retry_after else None,
-                )
+                retry_after = self._parse_retry_after(http_response)
+                if retry_after is not None and 0 < retry_after <= self.MAX_RETRY_AFTER_WAIT:
+                    logger.info(
+                        "[%s] HTTP 429, retrying once after %ds (Retry-After)",
+                        self.SOURCE_SLUG, retry_after,
+                    )
+                    time.sleep(retry_after)
+                    http_response = self.session.request(
+                        method=method, url=url, headers=headers, params=params,
+                        json=json_body, data=data_body, timeout=timeout,
+                    )
+                    elapsed_ms = int((time.monotonic() - start) * 1000)
+                    response.response_time_ms = elapsed_ms
+                if http_response.status_code == 429:
+                    raise RateLimitExceededError(self.SOURCE_SLUG, retry_after)
 
             # 404 on sources where it means "IOC not in database" (GreyNoise,
             # Shodan, SecurityTrails…) should be treated as zero results, not
@@ -170,6 +203,11 @@ class BaseAdapter(ABC):
                 logger.info("[%s] IOC not found in source (HTTP 404)", self.SOURCE_SLUG)
                 response.success = True
                 response.response_time_ms = elapsed_ms
+                # Record NOT_FOUND per expected field so the UI shows "no
+                # data" for this source instead of an empty gap.
+                if expected_fields:
+                    for field in expected_fields:
+                        response.add(field, None, ResultStatus.NOT_FOUND)
                 return response
 
             # Check for errors
@@ -257,6 +295,17 @@ class BaseAdapter(ABC):
             List of AdapterResult objects
         """
         ...
+
+    @staticmethod
+    def _parse_retry_after(http_response) -> int | None:
+        """Parse the Retry-After header (seconds form only; HTTP-date → None)."""
+        value = http_response.headers.get("Retry-After")
+        if not value:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def _safe_get(self, data: dict, path: str, default=None):
         """

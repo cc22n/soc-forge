@@ -53,7 +53,7 @@ SECURITYTRAILS = {
 THREATFOX = {
     "name": "ThreatFox", "slug": "threatfox",
     "base_url": "https://threatfox-api.abuse.ch/api/v1/",
-    "auth_type": "body_param", "env_var_name": "ABUSECH_AUTH_KEY",
+    "auth_type": "header", "env_var_name": "ABUSECH_AUTH_KEY",
     "supported_ioc_types": ["hash", "ip", "domain"],
     "rate_limit_per_minute": 10, "default_ttl_seconds": 86400, "priority": 9,
     "description": "Community IOC sharing for malware and botnet C2 indicators (abuse.ch).",
@@ -87,10 +87,10 @@ THREATFOX = {
 URLHAUS = {
     "name": "URLhaus", "slug": "urlhaus",
     "base_url": "https://urlhaus-api.abuse.ch/v1/",
-    "auth_type": "none", "env_var_name": "",
+    "auth_type": "header", "env_var_name": "ABUSECH_AUTH_KEY",
     "supported_ioc_types": ["url", "domain", "hash"],
     "rate_limit_per_minute": 10, "default_ttl_seconds": 43200, "priority": 10,
-    "description": "Malicious URL tracker focused on malware distribution sites (abuse.ch). Free, no API key.",
+    "description": "Malicious URL tracker focused on malware distribution sites (abuse.ch). Free; requires abuse.ch Auth-Key.",
     "fields": [
         # URL
         _f("url", "classification", "url_status", "required"),

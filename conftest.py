@@ -19,6 +19,15 @@ def use_locmem_cache(settings):
     """Force LocMemCache for all tests — no Redis required."""
     settings.CACHES = _LOCMEM_CACHES
 
+
+@pytest.fixture(autouse=True)
+def disable_source_rate_limit(settings):
+    """
+    Disable the per-source throttle so orchestrator tests don't sleep between
+    queries. The throttle itself is unit-tested in test_orchestrator.py.
+    """
+    settings.SOURCE_RATE_LIMIT_ENABLED = False
+
 from apps.core.enums import IOCType, UserRole
 from apps.users.models import User
 
