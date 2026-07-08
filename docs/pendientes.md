@@ -1,5 +1,11 @@
 # SOC Forge — Trabajo Pendiente
 > Estado al 2026-05-17. Actualizar con [x] al completar cada ítem.
+>
+> **✅ ARCHIVO CERRADO (2026-07-07):** Todo lo listado aquí fue completado y commiteado
+> en `e3bb3ef` (security hardening + fixes de adaptadores TASK-019 a 024) y
+> `0306a61` (IPGeolocation TASK-025 a 028). La migración `0006` está aplicada.
+> Se conserva solo como referencia histórica; la sección 2.2 (limitaciones de
+> planes gratuitos) sigue siendo información operativa útil.
 
 ---
 
