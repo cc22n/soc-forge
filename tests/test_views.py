@@ -301,3 +301,47 @@ class TestLLMSummaryEndpoint:
         with patch("apps.investigations.views.call_llm", return_value='{"summary":"x","recommendation":"y"}'):
             response = c.post(self.url(sample_investigation.pk))
         assert response.status_code == 403
+
+
+@pytest.mark.django_db
+class TestProfileAccessControl:
+    """A user must not use, view, or clone another user's private profile (IDOR)."""
+
+    @pytest.fixture
+    def other_profile(self, admin_user):
+        from apps.profiles.models import InvestigationProfile
+        return InvestigationProfile.objects.create(
+            owner=admin_user, name="Private Admin Profile", ioc_type="ip",
+        )
+
+    def test_cannot_clone_foreign_profile(self, auth_client, other_profile):
+        response = auth_client.get(f"/profiles/{other_profile.pk}/clone/")
+        assert response.status_code == 404
+
+    def test_cannot_investigate_with_foreign_profile(self, auth_client, other_profile):
+        response = auth_client.post("/investigations/new/", {
+            "ioc_value": "8.8.8.8",
+            "profile_id": other_profile.pk,
+        })
+        assert response.status_code == 404
+
+    def test_api_cannot_investigate_with_foreign_profile(self, client, analyst_user, other_profile):
+        from rest_framework.authtoken.models import Token
+        token, _ = Token.objects.get_or_create(user=analyst_user)
+        response = client.post(
+            "/api/investigations/create/",
+            {"ioc_value": "8.8.8.8", "profile_id": other_profile.pk},
+            HTTP_AUTHORIZATION=f"Token {token.key}",
+        )
+        assert response.status_code == 404
+
+    def test_can_clone_default_profile(self, auth_client, admin_user):
+        from apps.profiles.models import InvestigationProfile
+        default = InvestigationProfile.objects.create(
+            owner=admin_user, name="Shared Default", ioc_type="ip", is_default=True,
+        )
+        response = auth_client.get(f"/profiles/{default.pk}/clone/")
+        assert response.status_code == 302
+        assert InvestigationProfile.objects.filter(
+            owner__username="analyst1", name__contains="Copy"
+        ).exists()

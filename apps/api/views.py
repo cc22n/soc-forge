@@ -8,6 +8,7 @@ All endpoints require a valid token in the Authorization header:
 
 import logging
 
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
@@ -48,7 +49,12 @@ def investigation_create(request):
 
     ioc_value = ser.validated_data["ioc_value"].strip()
     profile_id = ser.validated_data["profile_id"]
-    profile = get_object_or_404(InvestigationProfile, pk=profile_id)
+    # Only the user's own profiles or shared defaults (see web view rule).
+    profile = get_object_or_404(
+        InvestigationProfile,
+        Q(owner=request.user) | Q(is_default=True),
+        pk=profile_id,
+    )
 
     detected = detect_ioc_type(ioc_value)
     if detected and IOCType.get_general_type(detected) != IOCType.get_general_type(profile.ioc_type):

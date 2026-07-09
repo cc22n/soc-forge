@@ -3,7 +3,7 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.core.enums import IOCType
@@ -251,8 +251,12 @@ def profile_delete(request, pk):
 
 @login_required
 def profile_clone(request, pk):
-    """Clone a default (or any) profile into user's own profiles."""
-    original = get_object_or_404(InvestigationProfile, pk=pk)
+    """Clone a default profile (or one of the user's own) into user's own profiles."""
+    original = get_object_or_404(
+        InvestigationProfile,
+        Q(owner=request.user) | Q(is_default=True),
+        pk=pk,
+    )
 
     with transaction.atomic():
         # Create the clone
