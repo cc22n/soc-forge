@@ -91,9 +91,9 @@ class CommunityResult(models.Model):
         auto_now_add=True,
         db_index=True,
     )
-    confidence_votes = models.PositiveIntegerField(
+    confidence_votes = models.IntegerField(
         default=0,
-        help_text="Net positive confirmation votes.",
+        help_text="Net score: confirm votes minus dispute votes. Can go negative.",
     )
 
     class Meta:
@@ -104,6 +104,16 @@ class CommunityResult(models.Model):
         indexes = [
             models.Index(fields=["community_indicator", "field_name"]),
             models.Index(fields=["contributed_by", "-contributed_at"]),
+        ]
+        constraints = [
+            # Prevents duplicate rows for the same field when two analysts
+            # share investigations for the same indicator concurrently —
+            # share_investigation() relies on this at the DB level via
+            # get_or_create() rather than a check-then-act read.
+            models.UniqueConstraint(
+                fields=["community_indicator", "source", "field_name"],
+                name="unique_community_result_field",
+            ),
         ]
 
     def __str__(self):

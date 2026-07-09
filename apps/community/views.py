@@ -162,29 +162,32 @@ def share_investigation(request, investigation_pk):
                 source_ttl = r.source.default_ttl_seconds if r.source else 0
                 cutoff = timezone.now() - timedelta(seconds=source_ttl) if source_ttl > 0 else None
 
-                existing = CommunityResult.objects.filter(
+                # get_or_create relies on the unique_community_result_field
+                # DB constraint to stay race-safe when two analysts share
+                # investigations for the same indicator concurrently — a
+                # plain filter().first() + create() would let both requests
+                # see "no row yet" and insert duplicates.
+                result, created = CommunityResult.objects.get_or_create(
                     community_indicator=ci,
                     source=r.source,
                     field_name=r.field_name,
-                ).first()
+                    defaults={"value": r.value, "contributed_by": request.user},
+                )
 
-                if existing is None:
-                    CommunityResult.objects.create(
-                        community_indicator=ci,
-                        source=r.source,
-                        field_name=r.field_name,
-                        value=r.value,
-                        contributed_by=request.user,
-                    )
+                if created:
                     shared_count += 1
-                elif cutoff and existing.contributed_at < cutoff:
-                    # Stale result — update with fresh data
-                    CommunityResult.objects.filter(pk=existing.pk).update(
+                elif cutoff and result.contributed_at < cutoff:
+                    # Stale result — update with fresh data. The cutoff
+                    # condition is re-checked in the UPDATE itself so a
+                    # concurrent refresh can't be clobbered by a stale write.
+                    updated = CommunityResult.objects.filter(
+                        pk=result.pk, contributed_at__lt=cutoff,
+                    ).update(
                         value=r.value,
                         contributed_by=request.user,
                         contributed_at=timezone.now(),
                     )
-                    shared_count += 1
+                    shared_count += updated
                 # else: fresh existing result — skip
 
             # Mark investigation as shared
