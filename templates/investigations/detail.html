@@ -8,6 +8,20 @@
     </a>
 </div>
 
+{% if investigation.status == "pending" or investigation.status == "running" %}
+<!-- Async investigation still executing: poll by reloading until terminal -->
+<div class="bg-indigo-900/20 border border-indigo-800/40 rounded-lg p-4 mb-6 flex items-center gap-3">
+    <svg class="w-5 h-5 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+    </svg>
+    <span class="text-sm text-indigo-200">
+        Investigation in progress — sources are being queried. This page refreshes automatically.
+    </span>
+</div>
+<script>setTimeout(function () { window.location.reload(); }, 3000);</script>
+{% endif %}
+
 <!-- Header -->
 <div class="bg-[#1a1a2e] border border-[#2d2d44] rounded-lg p-6 mb-6">
     <div class="flex items-start justify-between">

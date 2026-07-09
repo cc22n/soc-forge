@@ -5,12 +5,13 @@ from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.contrib import messages
+from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from apps.core.enums import IOCType, ResultStatus
+from apps.core.enums import IOCType, InvestigationStatus, ResultStatus
 from apps.core.mixins import org_investigations_filter, user_can_access_investigation
 from apps.core.validators import detect_ioc_type
 from apps.profiles.models import InvestigationProfile
@@ -60,7 +61,14 @@ def investigation_new(request):
                 "ioc_value": ioc_value,
             })
 
-        profile = get_object_or_404(InvestigationProfile, pk=profile_id)
+        # Only the user's own profiles or shared defaults — same rule as the
+        # list above; prevents running investigations with someone else's
+        # private profile by tampering with the POSTed pk.
+        profile = get_object_or_404(
+            InvestigationProfile,
+            Q(owner=request.user) | Q(is_default=True),
+            pk=profile_id,
+        )
 
         # Auto-detect IOC type and check compatibility with profile
         detected = detect_ioc_type(ioc_value)
@@ -77,18 +85,30 @@ def investigation_new(request):
                     "ioc_value": ioc_value,
                 })
 
-        # Execute investigation
+        # Execute investigation — async via Celery when enabled, else inline.
         try:
-            orchestrator = InvestigationOrchestrator()
-            investigation = orchestrator.run(
-                user=request.user,
-                ioc_value=ioc_value,
-                profile=profile,
-            )
-            messages.success(
-                request,
-                f"Investigation completed — {investigation.coverage_score:.0f}% coverage ({investigation.get_status_display()})"
-            )
+            if settings.INVESTIGATIONS_ASYNC:
+                from .tasks import dispatch_investigation
+                investigation = dispatch_investigation(
+                    user=request.user, ioc_value=ioc_value, profile=profile,
+                )
+            else:
+                investigation = InvestigationOrchestrator().run(
+                    user=request.user,
+                    ioc_value=ioc_value,
+                    profile=profile,
+                )
+
+            if investigation.status in (InvestigationStatus.PENDING, InvestigationStatus.RUNNING):
+                messages.info(
+                    request,
+                    "Investigation started — this page refreshes automatically while sources respond."
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Investigation completed — {investigation.coverage_score:.0f}% coverage ({investigation.get_status_display()})"
+                )
             return redirect("investigations:detail", pk=investigation.pk)
 
         except Exception as e:
