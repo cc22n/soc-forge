@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Adapter Health — SOC Forge{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-white">Adapter Health</h1>
+    <p class="text-sm text-gray-500 mt-1">{{ active_count }} active sources · last 30 days · found vs. not-found vs. real errors</p>
+</div>
+
+<!-- Summary tiles -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="animate-in bg-[var(--bg-card)] card-glow rounded-lg px-4 py-3">
+        <p class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Healthy</p>
+        <p class="text-xl font-bold text-emerald-400 mt-0.5">{{ summary.healthy }}</p>
+    </div>
+    <div class="animate-in bg-[var(--bg-card)] card-glow rounded-lg px-4 py-3">
+        <p class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Degraded</p>
+        <p class="text-xl font-bold text-amber-400 mt-0.5">{{ summary.degraded }}</p>
+    </div>
+    <div class="animate-in bg-[var(--bg-card)] card-glow rounded-lg px-4 py-3">
+        <p class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Down</p>
+        <p class="text-xl font-bold text-red-400 mt-0.5">{{ summary.down }}</p>
+    </div>
+    <div class="animate-in bg-[var(--bg-card)] card-glow rounded-lg px-4 py-3">
+        <p class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">No Data (30d)</p>
+        <p class="text-xl font-bold text-[var(--text-muted)] mt-0.5">{{ summary.no_data }}</p>
+    </div>
+</div>
+
+<!-- Health table -->
+<div class="animate-in bg-[var(--bg-card)] card-glow rounded-lg p-5">
+    {% if sources %}
+    <table class="w-full text-xs">
+        <thead>
+            <tr class="border-b border-[var(--border)]">
+                <th class="text-left pb-2 text-[var(--text-muted)] font-medium">Source</th>
+                <th class="text-left pb-2 text-[var(--text-muted)] font-medium">Status</th>
+                <th class="text-left pb-2 text-[var(--text-muted)] font-medium w-40">Found / No-data / Error</th>
+                <th class="text-right pb-2 text-[var(--text-muted)] font-medium">Found%</th>
+                <th class="text-right pb-2 text-[var(--text-muted)] font-medium">Error%</th>
+                <th class="text-right pb-2 text-[var(--text-muted)] font-medium">Avg ms</th>
+                <th class="text-right pb-2 text-[var(--text-muted)] font-medium">Last used</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in sources %}
+            <tr class="table-row border-b border-[var(--border)]/30 {% if row.health == 'no_data' %}opacity-50{% endif %}">
+                <td class="py-2">
+                    <span class="text-gray-200 font-medium">{{ row.source.name }}</span>
+                    <span class="text-[var(--text-muted)] font-mono ml-1">{{ row.source.slug }}</span>
+                </td>
+                <td class="py-2">
+                    {% if row.health == "healthy" %}
+                    <span class="badge badge-success">Healthy</span>
+                    {% elif row.health == "degraded" %}
+                    <span class="badge badge-warning">Degraded</span>
+                    {% elif row.health == "down" %}
+                    <span class="badge badge-danger">Down</span>
+                    {% else %}
+                    <span class="badge badge-neutral">No data (30d)</span>
+                    {% endif %}
+                </td>
+                <td class="py-2">
+                    {% if row.total > 0 %}
+                    <div class="w-full h-1.5 rounded-full overflow-hidden flex bg-[var(--border)]">
+                        <div class="h-full bg-emerald-500" style="width: {% widthratio row.found row.total 100 %}%"></div>
+                        <div class="h-full bg-[var(--text-muted)]" style="width: {% widthratio row.not_found row.total 100 %}%"></div>
+                        <div class="h-full bg-red-500" style="width: {% widthratio row.errors row.total 100 %}%"></div>
+                    </div>
+                    <p class="text-[10px] text-[var(--text-muted)] mt-1">{{ row.total }} results</p>
+                    {% else %}
+                    <p class="text-[10px] text-[var(--text-muted)]">no results in window</p>
+                    {% endif %}
+                </td>
+                <td class="py-2 text-right {% if row.found_rate >= 70 %}text-emerald-400{% elif row.found_rate >= 40 %}text-amber-400{% else %}text-gray-500{% endif %}">
+                    {% if row.total > 0 %}{{ row.found_rate }}%{% else %}—{% endif %}
+                </td>
+                <td class="py-2 text-right {% if row.error_rate >= 50 %}text-red-400{% elif row.error_rate >= 15 %}text-amber-400{% else %}text-gray-500{% endif %}">
+                    {% if row.total > 0 %}{{ row.error_rate }}%{% else %}—{% endif %}
+                </td>
+                <td class="py-2 text-right text-gray-400">{% if row.avg_ms %}{{ row.avg_ms|floatformat:0 }}{% else %}—{% endif %}</td>
+                <td class="py-2 text-right text-gray-500">{% if row.last_used %}{{ row.last_used|timesince }} ago{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-xs text-gray-500">No active sources configured.</p>
+    {% endif %}
+</div>
+{% endblock %}

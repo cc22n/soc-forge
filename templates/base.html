@@ -175,12 +175,22 @@
                 </a>
                 <a href="{% url 'sources:list' %}"
                    class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
-                   {% if current_app == 'sources' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                   {% if current_app == 'sources' and current_url != 'health' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
                     <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
                     </svg>
                     Sources
                 </a>
+                {% if user.is_admin %}
+                <a href="{% url 'sources:health' %}"
+                   class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
+                   {% if current_app == 'sources' and current_url == 'health' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
+                    <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                    Health
+                </a>
+                {% endif %}
                 <a href="{% url 'profiles:list' %}"
                    class="flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-md transition-all
                    {% if current_app == 'profiles' %}nav-active bg-[var(--bg-card)] text-white{% else %}text-[var(--text-secondary)] hover:text-white hover:bg-[rgba(30,34,53,0.4)]{% endif %}">
