@@ -15,9 +15,9 @@ Hay 15 archivos modificados y 1 migración nueva sin aplicar. Todos los cambios 
 
 ### Migración pendiente de aplicar
 
-- [ ] `python manage.py migrate` — aplicar `users.0006_username_ci_unique`
+- [x] `python manage.py migrate` — aplicar `users.0006_username_ci_unique`
   - Agrega constraint CI (case-insensitive) de unicidad para `username`
-  - Ya existe el archivo de migración, solo falta ejecutar
+  - Aplicada (confirmado con `showmigrations users`)
 
 ### Cambios para commitear
 
@@ -68,12 +68,15 @@ El orquestador corre adaptadores en paralelo con `ThreadPoolExecutor(max_workers
 
 ### 2.3 Fixes implementados (TASK-019 a TASK-024)
 
-- [ ] **TASK-019** — `REQUIRES_API_KEY` en BaseAdapter — saltar fuente si key vacía, sin error
-- [ ] **TASK-020** — `NOT_FOUND_IS_VALID` en BaseAdapter — tratar HTTP 404 como "sin datos" no como error
-- [ ] **TASK-021** — Aplicar `NOT_FOUND_IS_VALID = True` en GreyNoise, Shodan, SecurityTrails
-- [ ] **TASK-022** — Aplicar `REQUIRES_API_KEY = False` en ThreatFox, URLhaus, Malware Bazaar
-- [ ] **TASK-023** — Fix OTX: URL-encodar `ioc_value` para type `url`
-- [ ] **TASK-024** — Fix HybridAnalysis: remover `url` de `SUPPORTED_IOC_TYPES`
+- [x] **TASK-019** — `REQUIRES_API_KEY` en BaseAdapter — saltar fuente si key vacía, sin error
+- [x] **TASK-020** — `NOT_FOUND_IS_VALID` en BaseAdapter — tratar HTTP 404 como "sin datos" no como error
+- [x] **TASK-021** — Aplicar `NOT_FOUND_IS_VALID = True` en GreyNoise, Shodan, SecurityTrails
+- [x] **TASK-022** — Aplicar `REQUIRES_API_KEY = False` en ThreatFox, URLhaus, Malware Bazaar
+  - Nota: en `abusech.py` la clase base terminó con `REQUIRES_API_KEY = True` porque abuse.ch
+    hizo la autenticación obligatoria en 2025 (posterior a este plan) — divergencia intencional,
+    no bug pendiente.
+- [x] **TASK-023** — Fix OTX: URL-encodar `ioc_value` para type `url`
+- [x] **TASK-024** — Fix HybridAnalysis: remover `url` de `SUPPORTED_IOC_TYPES`
 
 ---
 
@@ -95,10 +98,31 @@ El archivo `integrar-ipgeolocation-plan-gratis.md` documenta la integración pen
 
 ## 4. Commit y Cierre
 
-- [ ] Aplicar migración `0006`
-- [ ] `git add` de todos los archivos modificados
-- [ ] Crear commit con todos los cambios del agente anterior + fixes de adaptadores
-- [ ] Opcional: eliminar archivos MD de plan del repo raíz (moverlos a `docs/`)
+- [x] Aplicar migración `0006`
+- [x] `git add` de todos los archivos modificados
+- [x] Crear commit con todos los cambios del agente anterior + fixes de adaptadores
+  (`e3bb3ef`, `0306a61`)
+- [x] Opcional: eliminar archivos MD de plan del repo raíz (moverlos a `docs/`)
+
+---
+
+## 5. Panel de Salud de Adaptadores (Nueva Feature)
+
+Dashboard admin-only en `/sources/health/` que agrega found/not_found/error+timeout y latencia
+promedio (30 días) por fuente, incluyendo fuentes que no dejaron ninguna fila de
+`InvestigationResult` (key faltante, drop por timeout global) — antes desaparecían del widget
+de performance del dashboard en vez de mostrarse como "sin datos".
+
+- [x] **TASK-029** — Vista `source_health()` en `apps/sources/views.py`, gateada con
+  `user_passes_test(lambda u: u.is_admin)` (primer uso de rol en una vista del proyecto)
+- [x] **TASK-030** — Ruta `sources:health` en `apps/sources/urls.py`
+- [x] **TASK-031** — Template `templates/sources/health.html` + link en sidebar (`base.html`,
+  visible solo para `user.is_admin`)
+- [x] **TASK-032** — Tests (`tests/test_sources_health.py`, 7 casos): gate de rol, fuente sin
+  datos → `no_data`, mayoría de errores → `down`, mayoría de `not_found` → sigue `healthy`
+
+**Estado de tests:** 180/180 ✅ (173 previos + 7 nuevos)
+**Commit:** `8081b9b` — pusheado a `origin/main`
 
 ---
 
@@ -110,6 +134,7 @@ El archivo `integrar-ipgeolocation-plan-gratis.md` documenta la integración pen
 | Fase 2 — Calidad y Seguridad | ✅ Completada |
 | Fase 3 — Escalabilidad | ✅ Completada |
 | Fase 4 — API y Automatización | ✅ Completada |
-| Fixes de Adaptadores (TASK-019 a 024) | 🔲 Pendiente |
-| Integración IPGeolocation (TASK-025 a 028) | 🔲 Pendiente |
-| Migración + Commit | 🔲 Pendiente |
+| Fixes de Adaptadores (TASK-019 a 024) | ✅ Completada |
+| Integración IPGeolocation (TASK-025 a 028) | ✅ Completada |
+| Migración + Commit | ✅ Completada |
+| Panel de Salud de Adaptadores (TASK-029 a 032) | ✅ Completada |
